@@ -16,6 +16,9 @@ dependencies:
   firebase_ui_auth: ^1.16.1
   google_sign_in: ^6.3.0
   firebase_ui_oauth_google: ^1.4.1
+  cloud_firestore: ^5.5.0
+  firebase_database: ^11.0.4
+
 
 dev_dependencies:
   flutter_test:
@@ -26,4 +29,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/kaching.jpg
+    - assets/kaching.png
