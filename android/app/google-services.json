@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "175995407076",
+    "project_id": "ka-ching-a9b4f",
+    "storage_bucket": "ka-ching-a9b4f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:175995407076:android:d56c19bff56634cfcf7af1",
+        "android_client_info": {
+          "package_name": "com.example.kaching"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSvMmI_VhJuCPUW07Fz3xLWeN7haP1nn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
