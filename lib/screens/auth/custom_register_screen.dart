@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'admin_home.dart';
-import 'user_home.dart';
+import '../home/admin_home.dart';
+import '../home/user_home.dart';
 
 class CustomRegisterScreen extends StatefulWidget {
   const CustomRegisterScreen({super.key});
@@ -76,6 +76,14 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
             key: _formKey,
             child: Column(
               children: [
+                 SizedBox(
+                  width: 120, // Adjust width as needed (e.g., 80–150)
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Image.asset('kaching.png'),
+                  ),
+                ),
+              const SizedBox(height: 16),
                 // Email
                 TextFormField(
                   controller: emailController,
