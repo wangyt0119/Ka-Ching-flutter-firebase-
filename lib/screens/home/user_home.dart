@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../theme/app_theme.dart'; // Make sure this includes your colors/styles
-import '../activities/add_activity_screen.dart'; // Import the new screen
+import '../../theme/app_theme.dart';
+import '../activities/add_activity_screen.dart';
+import '../transactions/add_expense_screen.dart'; // Import AddExpenseScreen
 
 class UserHomePage extends StatefulWidget {
   const UserHomePage({super.key});
@@ -28,8 +29,7 @@ class _UserHomePageState extends State<UserHomePage> {
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final data = doc.data();
 
       final activitySnapshot = await FirebaseFirestore.instance
@@ -38,7 +38,11 @@ class _UserHomePageState extends State<UserHomePage> {
           .collection('activities')
           .get();
 
-      final loadedActivities = activitySnapshot.docs.map((doc) => doc.data()).toList();
+      final loadedActivities = activitySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id; // Include activityId
+        return data;
+      }).toList();
 
       setState(() {
         fullName = data?['full_name'] ?? 'User';
@@ -69,7 +73,7 @@ class _UserHomePageState extends State<UserHomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-           Text("Hello, $fullName", style: Theme.of(context).textTheme.headlineSmall),
+            Text("Hello, $fullName", style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 20),
 
             // Balance Summary Card
@@ -124,7 +128,22 @@ class _UserHomePageState extends State<UserHomePage> {
             ),
 
             const SizedBox(height: 20),
-            const Text("Your Activities", style: TextStyle(fontWeight: FontWeight.bold)),
+            // Header row with "+ New" button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Your Activities", style: TextStyle(fontWeight: FontWeight.bold)),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AddActivityScreen()),
+                    ).then((_) => _loadUserData());
+                  },
+                  child: const Text("+ New", style: TextStyle(color: Colors.purple)),
+                )
+              ],
+            ),
             const SizedBox(height: 12),
 
             ...activities.map((activity) {
@@ -133,13 +152,15 @@ class _UserHomePageState extends State<UserHomePage> {
               final total = activity['total']?.toDouble() ?? 0.0;
               final status = activity['status'] ?? '';
               final amount = activity['amount']?.toDouble() ?? 0.0;
+              final members = activity['members'] != null ? (activity['members'] as List).length : 1;
+              final activityId = activity['id'];
 
               return Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
                   leading: const Icon(Icons.group, color: Colors.pinkAccent),
-                  title: Text(title),
-                  subtitle: Text(date),
+                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("$date $members members"),
                   trailing: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -153,26 +174,46 @@ class _UserHomePageState extends State<UserHomePage> {
                             backgroundColor: Colors.green.shade100),
                     ],
                   ),
+                  // onTap: () {
+                  //   Navigator.push(
+                  //     context,
+                  //     MaterialPageRoute(
+                  //       builder: (_) => AddExpenseScreen(
+                  //         activityId: activityId,
+                  //         activityName: title,
+                  //       ),
+                  //     ),
+                  //   );
+                  // },
                 ),
               );
-            }),
+            }).toList(),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.pinkAccent,
-        onPressed: () {
-          // Navigate to AddActivityScreen
+      backgroundColor: const Color.fromARGB(255, 237, 71, 137),
+      onPressed: () {
+        if (activities.isNotEmpty) {
+          // If at least one activity exists, navigate to the first one
+          final firstActivity = activities.first;
           Navigator.push(
-            context, 
-            MaterialPageRoute(builder: (context) => const AddActivityScreen()),
-          ).then((_) {
-            // Refresh user data when coming back from add activity screen
-            _loadUserData();
-          });
-        },
-        child: const Icon(Icons.add),
-      ),
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddExpenseScreen(
+                activityId: firstActivity['id'],
+                activityName: firstActivity['name'] ?? 'Untitled',
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please create an activity first.')),
+          );
+        }
+      },
+      child: const Icon(Icons.add),
+    ),
       bottomNavigationBar: BottomNavigationBar(
         selectedItemColor: Colors.purple,
         unselectedItemColor: Colors.grey,
