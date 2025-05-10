@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../activities/add_activity_screen.dart';
 import '../transactions/add_expense_screen.dart';
+import '../profile/profile_screen.dart';
+import '../activities/activity_detail_screen.dart';
 
 class UserHomePage extends StatefulWidget {
   const UserHomePage({super.key});
@@ -18,6 +20,9 @@ class _UserHomePageState extends State<UserHomePage> {
   double youAreOwed = 0;
   double totalBalance = 0;
   List<Map<String, dynamic>> activities = [];
+
+  int _selectedIndex = 0;
+  final List<Widget> _screens = [];
 
   @override
   void initState() {
@@ -50,34 +55,28 @@ class _UserHomePageState extends State<UserHomePage> {
         youAreOwed = data?['you_are_owed']?.toDouble() ?? 0.0;
         totalBalance = youAreOwed - youOwe;
         activities = loadedActivities.cast<Map<String, dynamic>>();
+
+        _screens.clear();
+        _screens.addAll([
+          _buildHomeBody(),
+          const Center(child: Text('Transactions')), 
+          const Center(child: Text('Friends')),      
+          const ProfileScreen(),                   
+        ]);
       });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.pink.shade100,
-        title: const Text("Ka-Ching", style: TextStyle(color: Colors.white)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Hello, $fullName", style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 20),
+  Widget _buildHomeBody() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Hello, $fullName", style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 20),
 
-            // Balance Summary
-            Card(
+          Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -88,27 +87,23 @@ class _UserHomePageState extends State<UserHomePage> {
                     children: [
                       const Text("Balance Summary", style: TextStyle(fontWeight: FontWeight.bold)),
                       TextButton(
-                      onPressed: () {
-                        // Currency change action
-                      },
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.attach_money, color: Colors.grey, size: 16),
-                            SizedBox(width: 4),
-                            Text("USD", style: TextStyle(color: Colors.grey)),
-                          ],
+                        onPressed: () {},
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.attach_money, color: Colors.grey, size: 16),
+                              SizedBox(width: 4),
+                              Text("USD", style: TextStyle(color: Colors.grey)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -119,52 +114,30 @@ class _UserHomePageState extends State<UserHomePage> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             const Text("You owe", style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                            Text(
-                              "\$${youOwe.toStringAsFixed(2)}",
-                              style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
+                            Text("\$${youOwe.toStringAsFixed(2)}", style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
-                      Container(
-                        height: 40,
-                        width: 1,
-                        color: AppTheme.dividerColor,
-                      ),
+                      Container(height: 40, width: 1, color: AppTheme.dividerColor),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             const Text("You are owed", style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                            Text(
-                              "\$${youAreOwed.toStringAsFixed(2)}",
-                              style: const TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
+                            Text("\$${youAreOwed.toStringAsFixed(2)}", style: const TextStyle(color: Colors.green, fontSize: 18, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16), // Space above divider
+                  const SizedBox(height: 16),
                   const Divider(),
-                  const SizedBox(height: 16), // Space below divider
-
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Total balance",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),),
-                      Text(
-                        "\$${totalBalance.toStringAsFixed(2)}",
-                        style: TextStyle(
-                          color: totalBalance >= 0 ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      )
+                      const Text("Total balance", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text("\$${totalBalance.toStringAsFixed(2)}", style: TextStyle(color: totalBalance >= 0 ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -172,170 +145,173 @@ class _UserHomePageState extends State<UserHomePage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.pink.shade100,
                       foregroundColor: Colors.white,
-                      minimumSize: const Size(600, 35),
+                      minimumSize: const Size(double.infinity, 35),
                     ),
-                    onPressed: () {}, // TODO: handle settle up
+                    onPressed: () {},
                     child: const Text("Settle Up"),
-                  )
+                  ),
                 ],
               ),
             ),
           ),
 
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Your Activities", style: TextStyle(fontWeight: FontWeight.bold)),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AddActivityScreen()),
+                  ).then((_) => _loadUserData());
+                },
+                child: const Text("+ New", style: TextStyle(color: Colors.grey)),
+              )
+            ],
+          ),
+          const SizedBox(height: 12),
 
-            const SizedBox(height: 20),
+          ...activities.map((activity) {
+            final title = activity['name'] ?? 'Untitled';
+            final createdAt = (activity['createdAt'] as Timestamp?)?.toDate().toLocal().toString().split(' ')[0] ?? '';
+            final total = activity['total']?.toDouble() ?? 0.0;
+            final status = activity['status'] ?? '';
+            final amount = activity['amount']?.toDouble() ?? 0.0;
+            final members = activity['members'] != null ? (activity['members'] as List).length : 1;
 
-            // Header + New button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Your Activities", style: TextStyle(fontWeight: FontWeight.bold)),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AddActivityScreen()),
-                    ).then((_) => _loadUserData());
-                  },
-                  child: const Text("+ New", style: TextStyle(color: Colors.grey)),
-                )
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Activities List
-            ...activities.map((activity) {
-              final title = activity['name'] ?? 'Untitled';
-              final createdAt = (activity['createdAt'] as Timestamp?)?.toDate().toLocal().toString().split(' ')[0] ?? '';
-              final total = activity['total']?.toDouble() ?? 0.0;
-              final status = activity['status'] ?? '';
-              final amount = activity['amount']?.toDouble() ?? 0.0;
-              final members = activity['members'] != null ? (activity['members'] as List).length : 1;
-
-              return Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), // Add padding
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero, // avoid extra space from ListTile itself
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ActivityDetailsPage(activityId: activity['id']),
+            return Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ActivityDetailsScreen(activityId: activity['id']),
+                          ),
+                        );
+                      },
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryLightColor,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      );
-                    }, 
-                    leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryLightColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.hiking, color: AppTheme.accentColor),
-                  ),
-                    title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(createdAt),
-                        const SizedBox(height: 4),
-                        
-                      ],
-                    ),
-                    trailing: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("\$${total.toStringAsFixed(2)}",
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                        const Text("Total spent", style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.people, size: 16, color: AppTheme.textPrimary),
-                      const SizedBox(width: 4),
-                      Text(
-                        "$members members",
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        child: const Icon(Icons.hiking, color: AppTheme.accentColor),
                       ),
-                      const Spacer(), // Pushes the status container to the right
-                      status == 'owe'
-                          ? Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color.fromARGB(255, 254, 213, 217),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                "You owe \$${amount.toStringAsFixed(2)}",
-                                style: TextStyle(
-                                  color: AppTheme.negativeAmount,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(createdAt),
+                          const SizedBox(height: 4),
+                        ],
+                      ),
+                      trailing: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("\$${total.toStringAsFixed(2)}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          const Text("Total spent", style: TextStyle(fontSize: 12, color: AppTheme.textPrimary)),
+                        ],
+                      ),
+                    ),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.people, size: 16, color: AppTheme.textPrimary),
+                        const SizedBox(width: 4),
+                        Text("$members members", style: const TextStyle(color: AppTheme.textPrimary)),
+                        const Spacer(),
+                        status == 'owe'
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(255, 254, 213, 217),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                              ),
-                            )
-                          : Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color.fromARGB(255, 214, 244, 215),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                "You get back \$${amount.toStringAsFixed(2)}",
-                                style: TextStyle(
-                                  color: AppTheme.positiveAmount,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                child: Text("You owe \$${amount.toStringAsFixed(2)}", style: TextStyle(color: AppTheme.negativeAmount, fontSize: 12, fontWeight: FontWeight.bold)),
+                              )
+                            : Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(255, 214, 244, 215),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
+                                child: Text("You get back \$${amount.toStringAsFixed(2)}", style: TextStyle(color: AppTheme.positiveAmount, fontSize: 12, fontWeight: FontWeight.bold)),
                               ),
-                            ),
-                    ],
-                  ),
-
-                ],
-              ),
-            ),
-          );
-
-            }).toList(),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color.fromARGB(255, 237, 71, 137),
-        onPressed: () {
-          if (activities.isNotEmpty) {
-            final firstActivity = activities.first;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AddExpenseScreen(
-                  activityId: firstActivity['id'],
-                  activityName: firstActivity['name'] ?? 'Untitled',
+                      ],
+                    ),
+                  ],
                 ),
               ),
             );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please create an activity first.')),
-            );
-          }
-        },
-        child: const Icon(Icons.add),
+          }).toList(),
+        ],
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: _selectedIndex == 0
+      ? AppBar(
+          backgroundColor: Colors.pink.shade100,
+          title: const Text('Ka-Ching', style: TextStyle(color: Colors.white)),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none, color: Colors.white),
+              onPressed: () {},
+            ),
+          ],
+        )
+      : null,
+
+      body: _screens.isNotEmpty ? _screens[_selectedIndex] : const Center(child: CircularProgressIndicator()),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              backgroundColor: const Color.fromARGB(255, 237, 71, 137),
+              onPressed: () {
+                if (activities.isNotEmpty) {
+                  final firstActivity = activities.first;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AddExpenseScreen(
+                        activityId: firstActivity['id'],
+                        activityName: firstActivity['name'] ?? 'Untitled',
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please create an activity first.')),
+                  );
+                }
+              },
+              child: const Icon(Icons.add),
+            )
+          : null,
       bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: Colors.purple,
-        unselectedItemColor: Colors.grey,
+        currentIndex: _selectedIndex,
+        selectedItemColor: AppTheme.textSecondary,
+        unselectedItemColor: AppTheme.primaryColor,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt), label: 'Transactions'),
@@ -343,21 +319,6 @@ class _UserHomePageState extends State<UserHomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
-    );
-  }
-}
-
-//create a new file for the activity details page
-class ActivityDetailsPage extends StatelessWidget {
-  final String activityId;
-
-  const ActivityDetailsPage({super.key, required this.activityId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Activity Details")),
-      body: Center(child: Text("Details for activity: $activityId")),
     );
   }
 }
