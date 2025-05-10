@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../../services/currency_service.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -14,6 +15,31 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String _selectedFilter = 'All';
+  String _selectedCurrency = 'USD';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserCurrency();
+  }
+
+  Future<void> _loadUserCurrency() async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        final DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(currentUser.uid).get();
+
+        if (userDoc.exists) {
+          setState(() {
+            _selectedCurrency = userDoc.get('currency') ?? 'USD';
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading currency: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +85,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               children: [
                 Text(
                   'Filter: $_selectedFilter',
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                const Spacer(),
+                Text(
+                  'Currency: $_selectedCurrency',
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
               ],
@@ -107,40 +138,66 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     final amount = transaction['amount'] as double;
                     final isExpense = transaction['type'] == 'Expense';
                     final date = (transaction['date'] as Timestamp).toDate();
+                    final transactionCurrency =
+                        transaction['currency'] ?? 'USD';
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                    return FutureBuilder<double>(
+                      future: CurrencyService.convertCurrency(
+                        amount,
+                        transactionCurrency,
+                        _selectedCurrency,
                       ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              isExpense
-                                  ? Colors.red.withOpacity(0.2)
-                                  : Colors.green.withOpacity(0.2),
-                          child: Icon(
-                            isExpense ? Icons.remove : Icons.add,
-                            color: isExpense ? Colors.red : Colors.green,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        final convertedAmount = snapshot.data ?? amount;
+                        final formattedAmount = CurrencyService.formatCurrency(
+                          convertedAmount,
+                          _selectedCurrency,
+                        );
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                        ),
-                        title: Text(
-                          transaction['description'] ?? 'No description',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          DateFormat('MMM dd, yyyy').format(date),
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        trailing: Text(
-                          '${isExpense ? '-' : '+'}\$${amount.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: isExpense ? Colors.red : Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  isExpense
+                                      ? Colors.red.withOpacity(0.2)
+                                      : Colors.green.withOpacity(0.2),
+                              child: Icon(
+                                isExpense ? Icons.remove : Icons.add,
+                                color: isExpense ? Colors.red : Colors.green,
+                              ),
+                            ),
+                            title: Text(
+                              transaction['description'] ?? 'No description',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              DateFormat('MMM dd, yyyy').format(date),
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            trailing: Text(
+                              '${isExpense ? '-' : '+'}$formattedAmount',
+                              style: TextStyle(
+                                color: isExpense ? Colors.red : Colors.green,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 );
