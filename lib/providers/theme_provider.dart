@@ -85,18 +85,34 @@ class ThemeProvider with ChangeNotifier {
     colorScheme: ColorScheme.light(
       primary: const Color(0xFFF5A9C1),
       secondary: const Color(0xFF8F5AFF), // Vibrant purple accent
-      background: Color(0xFFF8F6FC), // Very light background
-      surface: Color(0xFFF2F1F6), // Soft card color
+      background: Color(0xFFF6F8FF), // Soft blue-tinted white
+      surface: Color(0xFFFFFFFF), // Pure white for cards
       onBackground: Color(0xFF23272F),
       onSurface: Color(0xFF23272F),
+      error: Color(0xFFFF6B6B),
     ),
-    scaffoldBackgroundColor: const Color(0xFFF8F6FC),
+    scaffoldBackgroundColor: const Color(0xFFF6F8FF),
     appBarTheme: const AppBarTheme(
       backgroundColor: Color(0xFFF5A9C1),
       foregroundColor: Colors.white,
       elevation: 0,
+      titleTextStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 22,
+      ),
+      iconTheme: IconThemeData(color: Colors.white),
     ),
-    cardColor: const Color(0xFFF2F1F6),
+    cardColor: const Color(0xFFFFFFFF),
+    cardTheme: CardTheme(
+      color: Color(0xFFFFFFFF),
+      elevation: 3,
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+      shadowColor: Color(0x1A23272F),
+    ),
     dividerColor: Color(0xFFE0E0E0),
     switchTheme: SwitchThemeData(
       thumbColor: MaterialStatePropertyAll(Color(0xFFF5A9C1)),
@@ -108,11 +124,55 @@ class ThemeProvider with ChangeNotifier {
       overlayColor: Color(0x298F5AFF),
       inactiveTrackColor: Color(0xFFD1C4E9),
     ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Color(0xFFF6F8FF),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFF8F5AFF), width: 1.2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFF8F5AFF), width: 1.2),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFF5A9C1), width: 2),
+      ),
+      labelStyle: TextStyle(color: Color(0xFF8F5AFF)),
+      hintStyle: TextStyle(color: Color(0xFFB0AEB8)),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Color(0xFFF5A9C1),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: TextStyle(fontWeight: FontWeight.bold),
+        elevation: 2,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: Color(0xFF8F5AFF),
+        textStyle: TextStyle(fontWeight: FontWeight.bold),
+      ),
+    ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Color(0xFFF2F1F6),
+      backgroundColor: Color(0xFFFFFFFF),
       selectedItemColor: Color(0xFF8F5AFF),
       unselectedItemColor: Color(0xFFB0AEB8),
       showUnselectedLabels: true,
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: Color(0xFF8F5AFF),
+      contentTextStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      behavior: SnackBarBehavior.floating,
     ),
   );
 
@@ -121,18 +181,34 @@ class ThemeProvider with ChangeNotifier {
     colorScheme: ColorScheme.dark(
       primary: const Color(0xFFF5A9C1),
       secondary: const Color(0xFFB388FF), // Brighter purple accent
-      background: const Color(0xFF181A20), // Softer dark background
+      background: const Color(0xFF181A20), // Deep blue-gray
       surface: const Color(0xFF23272F), // Card/surface color
       onBackground: Colors.white,
       onSurface: Colors.white,
+      error: Color(0xFFFF6B6B),
     ),
     scaffoldBackgroundColor: const Color(0xFF181A20),
     appBarTheme: const AppBarTheme(
       backgroundColor: Color(0xFFF5A9C1),
       foregroundColor: Colors.white,
       elevation: 0,
+      titleTextStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 22,
+      ),
+      iconTheme: IconThemeData(color: Colors.white),
     ),
     cardColor: const Color(0xFF23272F),
+    cardTheme: CardTheme(
+      color: Color(0xFF23272F),
+      elevation: 3,
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(16)),
+      ),
+      shadowColor: Color(0x66000000),
+    ),
     dividerColor: Colors.grey,
     switchTheme: SwitchThemeData(
       thumbColor: MaterialStatePropertyAll(Color(0xFFF5A9C1)),
@@ -144,11 +220,55 @@ class ThemeProvider with ChangeNotifier {
       overlayColor: Color(0x29B388FF),
       inactiveTrackColor: Colors.grey,
     ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Color(0xFF23272F),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFB388FF), width: 1.2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFB388FF), width: 1.2),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFFF5A9C1), width: 2),
+      ),
+      labelStyle: TextStyle(color: Color(0xFFB388FF)),
+      hintStyle: TextStyle(color: Colors.white54),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Color(0xFFF5A9C1),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: TextStyle(fontWeight: FontWeight.bold),
+        elevation: 2,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: Color(0xFFB388FF),
+        textStyle: TextStyle(fontWeight: FontWeight.bold),
+      ),
+    ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: Color(0xFF23272F),
       selectedItemColor: Color(0xFFF5A9C1),
       unselectedItemColor: Colors.white70,
       showUnselectedLabels: true,
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: Color(0xFFB388FF),
+      contentTextStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      behavior: SnackBarBehavior.floating,
     ),
   );
 
