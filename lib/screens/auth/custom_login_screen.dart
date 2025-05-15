@@ -277,10 +277,10 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Image.asset(
-                              'assets/google_logo.png',
-                              height: 24,
-                              width: 24,
+                            Icon(
+                              Icons.g_mobiledata,
+                              color: Colors.red,
+                              size: 28,
                             ),
                             const SizedBox(width: 12),
                             const Text(

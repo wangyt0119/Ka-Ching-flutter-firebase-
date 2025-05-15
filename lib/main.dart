@@ -28,7 +28,6 @@ class MyApp extends StatelessWidget {
             title: 'KaChing',
             theme: themeService.getTheme().copyWith(
               textTheme: themeService.getTextTheme(context),
-
             ),
             debugShowCheckedModeBanner: false,
             home: const AuthGate(),

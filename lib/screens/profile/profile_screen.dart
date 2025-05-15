@@ -4,10 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
 
 import 'edit_profile_screen.dart';
-import 'settings_screen.dart';
+import '../settings/settings_screen.dart';
 import 'help_support_screen.dart';
 import '../../services/currency_service.dart';
-import '../settings/settings_screen.dart';
 import '../help/help_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
