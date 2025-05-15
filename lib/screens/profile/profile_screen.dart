@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
+
+import 'edit_profile_screen.dart';
+import 'settings_screen.dart';
+import 'help_support_screen.dart';
 import '../../services/currency_service.dart';
 import '../settings/settings_screen.dart';
 import '../help/help_screen.dart';
@@ -227,7 +231,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
-            onPressed: _showEditProfileDialog,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => EditProfileScreen(currentName: fullName),
+                ),
+              ).then((updated) {
+                if (updated == true) {
+                  _fetchUserData();
+                }
+              });
+            },
           ),
         ],
       ),
@@ -303,8 +319,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           // Settings, Help, Currency, Logout options
-          _buildMenuOption(Icons.settings, 'Settings', Colors.deepPurple),
-          _buildMenuOption(Icons.help, 'Help & Support', Colors.deepPurple),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.settings,
+              'Settings',
+              Colors.deepPurple,
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HelpSupportScreen(),
+                ),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.help,
+              'Help & Support',
+              Colors.deepPurple,
+            ),
+          ),
           _buildCurrencyOption(),
           _buildLogoutOption(),
         ],
