@@ -147,7 +147,7 @@ class HelpSupportScreen extends StatelessWidget {
         question,
         style: const TextStyle(
           fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          color: Color(0xFF6A0DAD),
         ),
       ),
       children: [

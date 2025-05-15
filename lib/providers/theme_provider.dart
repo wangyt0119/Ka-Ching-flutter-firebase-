@@ -35,28 +35,27 @@ class ThemeProvider with ChangeNotifier {
   }
 
   TextTheme get _textTheme {
-    // All text styles use the dynamic font size and appropriate color
-    final baseColor = _isDarkMode ? Colors.white : Colors.black;
+    final baseColor = _isDarkMode ? Colors.white : const Color(0xFF23272F);
     final secondaryColor = _isDarkMode ? Colors.white70 : Colors.black87;
     return TextTheme(
       displayLarge: TextStyle(
-        fontSize: _fontSize + 12,
+        fontSize: _fontSize * 2.2,
         color: baseColor,
         fontWeight: FontWeight.bold,
       ),
       displayMedium: TextStyle(
-        fontSize: _fontSize + 8,
+        fontSize: _fontSize * 1.8,
         color: baseColor,
         fontWeight: FontWeight.bold,
       ),
-      displaySmall: TextStyle(fontSize: _fontSize + 4, color: baseColor),
+      displaySmall: TextStyle(fontSize: _fontSize * 1.5, color: baseColor),
       headlineLarge: TextStyle(
-        fontSize: _fontSize + 6,
+        fontSize: _fontSize * 1.4,
         color: baseColor,
         fontWeight: FontWeight.bold,
       ),
       headlineMedium: TextStyle(
-        fontSize: _fontSize + 2,
+        fontSize: _fontSize * 1.2,
         color: baseColor,
         fontWeight: FontWeight.bold,
       ),
@@ -70,14 +69,14 @@ class ThemeProvider with ChangeNotifier {
         color: baseColor,
         fontWeight: FontWeight.bold,
       ),
-      titleMedium: TextStyle(fontSize: _fontSize, color: baseColor),
-      titleSmall: TextStyle(fontSize: _fontSize - 1, color: secondaryColor),
+      titleMedium: TextStyle(fontSize: _fontSize * 0.95, color: baseColor),
+      titleSmall: TextStyle(fontSize: _fontSize * 0.9, color: secondaryColor),
       bodyLarge: TextStyle(fontSize: _fontSize, color: baseColor),
-      bodyMedium: TextStyle(fontSize: _fontSize, color: secondaryColor),
-      bodySmall: TextStyle(fontSize: _fontSize - 2, color: secondaryColor),
+      bodyMedium: TextStyle(fontSize: _fontSize * 0.95, color: secondaryColor),
+      bodySmall: TextStyle(fontSize: _fontSize * 0.85, color: secondaryColor),
       labelLarge: TextStyle(fontSize: _fontSize, color: baseColor),
-      labelMedium: TextStyle(fontSize: _fontSize - 1, color: secondaryColor),
-      labelSmall: TextStyle(fontSize: _fontSize - 2, color: secondaryColor),
+      labelMedium: TextStyle(fontSize: _fontSize * 0.9, color: secondaryColor),
+      labelSmall: TextStyle(fontSize: _fontSize * 0.8, color: secondaryColor),
     );
   }
 
@@ -85,29 +84,35 @@ class ThemeProvider with ChangeNotifier {
     primaryColor: const Color(0xFFF5A9C1),
     colorScheme: ColorScheme.light(
       primary: const Color(0xFFF5A9C1),
-      secondary: const Color(0xFF6A0DAD),
-      background: Colors.white,
-      surface: Colors.white,
-      onBackground: Colors.black,
-      onSurface: Colors.black,
+      secondary: const Color(0xFF8F5AFF), // Vibrant purple accent
+      background: Color(0xFFF8F6FC), // Very light background
+      surface: Color(0xFFF2F1F6), // Soft card color
+      onBackground: Color(0xFF23272F),
+      onSurface: Color(0xFF23272F),
     ),
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: const Color(0xFFF8F6FC),
     appBarTheme: const AppBarTheme(
       backgroundColor: Color(0xFFF5A9C1),
       foregroundColor: Colors.white,
       elevation: 0,
     ),
-    cardColor: Colors.white,
-    dividerColor: Colors.grey[300],
+    cardColor: const Color(0xFFF2F1F6),
+    dividerColor: Color(0xFFE0E0E0),
     switchTheme: SwitchThemeData(
       thumbColor: MaterialStatePropertyAll(Color(0xFFF5A9C1)),
-      trackColor: MaterialStatePropertyAll(Color(0xFF6A0DAD)),
+      trackColor: MaterialStatePropertyAll(Color(0xFF8F5AFF)),
     ),
     sliderTheme: SliderThemeData(
-      activeTrackColor: Color(0xFF6A0DAD),
+      activeTrackColor: Color(0xFF8F5AFF),
       thumbColor: Color(0xFFF5A9C1),
-      overlayColor: Color(0x296A0DAD),
-      inactiveTrackColor: Colors.grey[400],
+      overlayColor: Color(0x298F5AFF),
+      inactiveTrackColor: Color(0xFFD1C4E9),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: Color(0xFFF2F1F6),
+      selectedItemColor: Color(0xFF8F5AFF),
+      unselectedItemColor: Color(0xFFB0AEB8),
+      showUnselectedLabels: true,
     ),
   );
 
