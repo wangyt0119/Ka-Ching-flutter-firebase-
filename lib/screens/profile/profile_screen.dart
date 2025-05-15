@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
+import 'edit_profile_screen.dart';
+import 'settings_screen.dart';
+import 'help_support_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -12,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   String fullName = '';
   String email = '';
   bool isLoading = true;
@@ -26,11 +30,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _fetchUserData() async {
     try {
       final User? currentUser = _auth.currentUser;
-      
+
       if (currentUser != null) {
-        final DocumentSnapshot userDoc = 
+        final DocumentSnapshot userDoc =
             await _firestore.collection('users').doc(currentUser.uid).get();
-        
+
         if (userDoc.exists) {
           setState(() {
             fullName = userDoc.get('full_name') ?? 'User';
@@ -80,9 +84,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
             onPressed: () {
-              // Add edit profile functionality
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => EditProfileScreen(currentName: fullName),
+                ),
+              ).then((updated) {
+                if (updated == true) {
+                  _fetchUserData();
+                }
+              });
             },
-          )
+          ),
         ],
       ),
       body: Column(
@@ -93,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 60,
             width: double.infinity,
           ),
-          
+
           // Profile picture (overlapping)
           Transform.translate(
             offset: const Offset(0, -50),
@@ -107,7 +121,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 100,
               child: Center(
                 child: Text(
-                  isLoading ? '' : fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                  isLoading
+                      ? ''
+                      : fullName.isNotEmpty
+                      ? fullName[0].toUpperCase()
+                      : 'U',
                   style: const TextStyle(
                     color: Color(0xFF6A0DAD),
                     fontSize: 36,
@@ -117,43 +135,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-          
+
           // User info
           Transform.translate(
             offset: const Offset(0, -30),
-            child: isLoading
-                ? const CircularProgressIndicator()
-                : Column(
-                    children: [
-                      Text(
-                        fullName,
-                        style: const TextStyle(
-                          color: Color(0xFF6A0DAD),
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+            child:
+                isLoading
+                    ? const CircularProgressIndicator()
+                    : Column(
+                      children: [
+                        Text(
+                          fullName,
+                          style: const TextStyle(
+                            color: Color(0xFF6A0DAD),
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        email,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
+                        const SizedBox(height: 8),
+                        Text(
+                          email,
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
           ),
-          
+
           // Divider
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Divider(thickness: 1),
           ),
-          
+
           // Settings, Help, Currency, Logout options
-          _buildMenuOption(Icons.settings, 'Settings', Colors.deepPurple),
-          _buildMenuOption(Icons.help, 'Help & Support', Colors.deepPurple),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.settings,
+              'Settings',
+              Colors.deepPurple,
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HelpSupportScreen(),
+                ),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.help,
+              'Help & Support',
+              Colors.deepPurple,
+            ),
+          ),
           _buildCurrencyOption(),
           _buildLogoutOption(),
         ],
@@ -201,10 +246,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               Text(
                 'Currently: USD',
-                style: TextStyle(
-                  color: Colors.deepPurple,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.deepPurple, fontSize: 12),
               ),
             ],
           ),
