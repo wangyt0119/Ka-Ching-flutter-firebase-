@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
+
 import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
 import 'help_support_screen.dart';
+import '../../services/currency_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,12 +21,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String fullName = '';
   String email = '';
+  String selectedCurrency = 'USD';
   bool isLoading = true;
+  final TextEditingController _nameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _fetchUserData();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchUserData() async {
@@ -39,6 +49,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             fullName = userDoc.get('full_name') ?? 'User';
             email = currentUser.email ?? 'No email';
+            selectedCurrency = userDoc.get('currency') ?? 'USD';
+            isLoading = false;
+          });
+        } else {
+          // Create user document if it doesn't exist
+          await _firestore.collection('users').doc(currentUser.uid).set({
+            'full_name': currentUser.displayName ?? 'User',
+            'email': currentUser.email,
+            'currency': 'USD',
+            'created_at': FieldValue.serverTimestamp(),
+          });
+          setState(() {
+            fullName = currentUser.displayName ?? 'User';
+            email = currentUser.email ?? 'No email';
+            selectedCurrency = 'USD';
             isLoading = false;
           });
         }
@@ -49,17 +74,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
         email = 'Error loading data';
         isLoading = false;
       });
-      print('Error fetching user data: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error loading profile: $e')));
     }
+  }
+
+  Future<void> _updateProfile() async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'full_name': _nameController.text,
+        });
+        setState(() {
+          fullName = _nameController.text;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating profile: $e')));
+    }
+  }
+
+  Future<void> _updateCurrency(String newCurrency) async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'currency': newCurrency,
+        });
+
+        final currencyService = CurrencyService();
+        final currency =
+            currencyService.getCurrencyByCode(newCurrency) ??
+            currencyService.getDefaultCurrency();
+        await currencyService.setSelectedCurrency(currency);
+
+        setState(() {
+          selectedCurrency = newCurrency;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Currency updated successfully')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating currency: $e')));
+    }
+  }
+
+  void _showEditProfileDialog() {
+    _nameController.text = fullName;
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Edit Profile'),
+            content: TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Full Name',
+                hintText: 'Enter your full name',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  _updateProfile();
+                  Navigator.pop(context);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showCurrencyDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Select Currency'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: CurrencyService.supportedCurrencies.length,
+                itemBuilder: (context, index) {
+                  final currency = CurrencyService.supportedCurrencies.keys
+                      .elementAt(index);
+                  final currencyInfo =
+                      CurrencyService.supportedCurrencies[currency];
+                  return ListTile(
+                    title: Text(currencyInfo ?? currency),
+                    trailing:
+                        currency == selectedCurrency
+                            ? const Icon(Icons.check, color: Color(0xFFF5A9C1))
+                            : null,
+                    onTap: () {
+                      _updateCurrency(currency);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+    );
   }
 
   // Logout function
   Future<void> _logout() async {
-    await _auth.signOut();
-    // Navigate back to AuthGate (login screen)
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const AuthGate()),
-    );
+    try {
+      await _auth.signOut();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const AuthGate()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error logging out: $e')));
+    }
   }
 
   @override
@@ -229,28 +375,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildCurrencyOption() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(Icons.currency_exchange, color: Colors.deepPurple, size: 24),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Change Currency',
-                style: TextStyle(
-                  color: Colors.deepPurple,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+      child: GestureDetector(
+        onTap: _showCurrencyDialog,
+        child: Row(
+          children: [
+            Icon(Icons.currency_exchange, color: Colors.deepPurple, size: 24),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Change Currency',
+                  style: TextStyle(
+                    color: Colors.deepPurple,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              Text(
-                'Currently: USD',
-                style: TextStyle(color: Colors.deepPurple, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
+                Text(
+                  'Currently: $selectedCurrency',
+                  style: TextStyle(color: Colors.deepPurple, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
