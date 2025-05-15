@@ -7,6 +7,8 @@ import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
 import 'help_support_screen.dart';
 import '../../services/currency_service.dart';
+import '../settings/settings_screen.dart';
+import '../help/help_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -355,19 +357,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildMenuOption(IconData icon, String title, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 16),
-          Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+      child: GestureDetector(
+        onTap: () {
+          if (title == 'Settings') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            );
+          } else if (title == 'Help & Support') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const HelpScreen()),
+            );
+          }
+        },
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
