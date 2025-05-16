@@ -91,6 +91,7 @@ class _UserHomePageState extends State<UserHomePage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
+            color: Theme.of(context).cardColor,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -100,7 +101,10 @@ class _UserHomePageState extends State<UserHomePage> {
                     children: [
                       const Text(
                         "Balance Summary",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
                       ),
                       TextButton(
                         onPressed: () {},
@@ -139,7 +143,7 @@ class _UserHomePageState extends State<UserHomePage> {
                             const Text(
                               "You owe",
                               style: TextStyle(
-                                color: AppTheme.textSecondary,
+                                color: Color(0xFFD1A4F5),
                                 fontSize: 12,
                               ),
                             ),
@@ -166,7 +170,7 @@ class _UserHomePageState extends State<UserHomePage> {
                             const Text(
                               "You are owed",
                               style: TextStyle(
-                                color: AppTheme.textSecondary,
+                                color: Color(0xFFD1A4F5),
                                 fontSize: 12,
                               ),
                             ),
@@ -209,7 +213,7 @@ class _UserHomePageState extends State<UserHomePage> {
                   const SizedBox(height: 10),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pink.shade100,
+                      backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 35),
                     ),
@@ -268,6 +272,7 @@ class _UserHomePageState extends State<UserHomePage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              color: Theme.of(context).cardColor,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   vertical: 12,
@@ -303,7 +308,10 @@ class _UserHomePageState extends State<UserHomePage> {
                       ),
                       title: Text(
                         title,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,7 +332,7 @@ class _UserHomePageState extends State<UserHomePage> {
                             "Total spent",
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppTheme.textPrimary,
+                              color: Color(0xFFD1A4F5),
                             ),
                           ),
                         ],
@@ -337,12 +345,12 @@ class _UserHomePageState extends State<UserHomePage> {
                         const Icon(
                           Icons.people,
                           size: 16,
-                          color: AppTheme.textPrimary,
+                          color: Color(0xFFD1A4F5),
                         ),
                         const SizedBox(width: 4),
                         Text(
                           "$members members",
-                          style: const TextStyle(color: AppTheme.textPrimary),
+                          style: const TextStyle(color: Color(0xFFD1A4F5)),
                         ),
                         const Spacer(),
                         status == 'owe'
@@ -358,7 +366,7 @@ class _UserHomePageState extends State<UserHomePage> {
                               child: Text(
                                 "You owe \$${amount.toStringAsFixed(2)}",
                                 style: TextStyle(
-                                  color: AppTheme.negativeAmount,
+                                  color: Color(0xFFD1A4F5),
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -376,7 +384,7 @@ class _UserHomePageState extends State<UserHomePage> {
                               child: Text(
                                 "You get back \$${amount.toStringAsFixed(2)}",
                                 style: TextStyle(
-                                  color: AppTheme.positiveAmount,
+                                  color: Color(0xFFD1A4F5),
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -397,11 +405,11 @@ class _UserHomePageState extends State<UserHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar:
           _selectedIndex == 0
               ? AppBar(
-                backgroundColor: Colors.pink.shade100,
+                backgroundColor: Theme.of(context).primaryColor,
                 title: const Text(
                   'Ka-Ching',
                   style: TextStyle(color: Colors.white),

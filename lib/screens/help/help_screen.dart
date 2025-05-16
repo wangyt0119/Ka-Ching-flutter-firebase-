@@ -22,7 +22,7 @@ class HelpScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5A9C1),
+        backgroundColor: Theme.of(context).primaryColor,
         elevation: 0,
         title: const Text(
           'Help & Support',
@@ -41,24 +41,27 @@ class HelpScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // FAQ Section
-          const Text(
+          Text(
             'Frequently Asked Questions',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF6A0DAD),
+              color: Theme.of(context).colorScheme.secondary,
             ),
           ),
           const SizedBox(height: 16),
           _buildFAQItem(
+            context,
             'How do I add a new transaction?',
             'Tap the + button on the home screen and fill in the transaction details.',
           ),
           _buildFAQItem(
+            context,
             'How do I change my currency?',
             'Go to Profile and tap on the Currency option to select your preferred currency.',
           ),
           _buildFAQItem(
+            context,
             'Can I export my transactions?',
             'Yes, go to the Reports section and use the export feature to download your transactions.',
           ),
@@ -66,18 +69,21 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 32),
 
           // Contact Support Section
-          const Text(
+          Text(
             'Contact Support',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF6A0DAD),
+              color: Theme.of(context).colorScheme.secondary,
             ),
           ),
           const SizedBox(height: 16),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.email, color: Color(0xFF6A0DAD)),
+              leading: Icon(
+                Icons.email,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
               title: const Text('Email Support'),
               subtitle: const Text('support@kaching.com'),
               onTap: _launchEmail,
@@ -87,9 +93,9 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 32),
 
           // App Info
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -98,13 +104,16 @@ class HelpScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF6A0DAD),
+                      color: Theme.of(context).colorScheme.secondary,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text('Version: 1.0.0', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 8),
-                  Text(
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Version: 1.0.0',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
                     'KaChing is your personal finance companion, helping you track expenses and manage your money effectively.',
                   ),
                 ],
@@ -116,14 +125,14 @@ class HelpScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFAQItem(String question, String answer) {
+  Widget _buildFAQItem(BuildContext context, String question, String answer) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         title: Text(
           question,
-          style: const TextStyle(
-            color: Color(0xFF6A0DAD),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.secondary,
             fontWeight: FontWeight.w500,
           ),
         ),

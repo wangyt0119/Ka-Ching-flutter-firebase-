@@ -273,8 +273,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : fullName.isNotEmpty
                       ? fullName[0].toUpperCase()
                       : 'U',
-                  style: const TextStyle(
-                    color: Color(0xFF6A0DAD),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
                   ),
@@ -293,8 +293,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Text(
                           fullName,
-                          style: const TextStyle(
-                            color: Color(0xFF6A0DAD),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.secondary,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
@@ -302,10 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 8),
                         Text(
                           email,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       ],
                     ),
@@ -328,22 +325,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: _buildMenuOption(
               Icons.settings,
               'Settings',
-              Colors.deepPurple,
+              Theme.of(context).colorScheme.secondary,
             ),
           ),
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const HelpSupportScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const HelpScreen()),
               );
             },
             child: _buildMenuOption(
               Icons.help,
               'Help & Support',
-              Colors.deepPurple,
+              Theme.of(context).colorScheme.secondary,
             ),
           ),
           _buildCurrencyOption(),
@@ -395,7 +390,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onTap: _showCurrencyDialog,
         child: Row(
           children: [
-            Icon(Icons.currency_exchange, color: Colors.deepPurple, size: 24),
+            Icon(
+              Icons.currency_exchange,
+              color: Theme.of(context).colorScheme.secondary,
+              size: 24,
+            ),
             const SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,14 +402,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   'Change Currency',
                   style: TextStyle(
-                    color: Colors.deepPurple,
+                    color: Theme.of(context).colorScheme.secondary,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 Text(
                   'Currently: $selectedCurrency',
-                  style: TextStyle(color: Colors.deepPurple, fontSize: 12),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
