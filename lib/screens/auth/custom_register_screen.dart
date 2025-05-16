@@ -96,6 +96,7 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
         'full_name': fullNameController.text.trim(),
         'email': emailController.text.trim(),
         'role': selectedRole,
+        'currency': 'MYR',
       });
 
       if (selectedRole == 'admin') {

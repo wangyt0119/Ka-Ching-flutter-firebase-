@@ -407,11 +407,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                const SizedBox(width: 16),
                 Text(
                   'Currently: $selectedCurrency',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.secondary,
-                    fontSize: 12,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -426,15 +428,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: GestureDetector(
-        onTap: _logout, // Add the logout functionality here
+        onTap: _logout,
         child: Row(
           children: [
-            Icon(Icons.logout, color: Colors.redAccent, size: 24),
+            Icon(
+              Icons.logout,
+              color: Theme.of(context).colorScheme.error,
+              size: 24,
+            ),
             const SizedBox(width: 16),
             Text(
               'Logout',
               style: TextStyle(
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.error,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
