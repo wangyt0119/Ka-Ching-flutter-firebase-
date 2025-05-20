@@ -90,11 +90,24 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
       // Check role and navigate
       final user = userCredential.user;
       if (user != null) {
-        // You may want to check Firestore for role here
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const UserHomePage()),
-        );
+        // Get user role from Firestore
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final role = doc.data()?['role'] ?? 'user';
+        
+        if (role == 'admin') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminHomePage()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const UserHomePage()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       setState(() => errorMessage = e.message);
