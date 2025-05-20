@@ -181,6 +181,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         title: Text(_activity?['name'] ?? 'Activity Details'),
+        backgroundColor: const Color(0xFFF5A9C1),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),

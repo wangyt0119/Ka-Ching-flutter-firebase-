@@ -13,46 +13,47 @@ class AddActivityScreen extends StatefulWidget {
 class _AddActivityScreenState extends State<AddActivityScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  
+
   // Current user data
   String _userEmail = '';
   String _userName = '';
-  
+
   // List of friends
   List<Map<String, dynamic>> _friends = [];
-  
+
   // Selected friends for this activity (including current user)
   final List<Map<String, dynamic>> _selectedMembers = [];
-  
+
   @override
   void initState() {
     super.initState();
     _getCurrentUser();
     _loadFriends();
   }
-  
+
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
-  
+
   // Get current user info
   Future<void> _getCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
       final data = doc.data();
-      
+
       setState(() {
         _userEmail = user.email ?? '';
         _userName = data?['full_name'] ?? 'You';
-        
+
         // Add current user to selected members by default
         _selectedMembers.add({
           'id': user.uid,
@@ -63,21 +64,22 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       });
     }
   }
-  
+
   // Load friends from Firestore
   Future<void> _loadFriends() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        final friendsSnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('friends')
-            .get();
-            
+        final friendsSnapshot =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('friends')
+                .get();
+
         if (friendsSnapshot.docs.isNotEmpty) {
           final List<Map<String, dynamic>> loadedFriends = [];
-          
+
           for (var doc in friendsSnapshot.docs) {
             final friendData = doc.data();
             loadedFriends.add({
@@ -87,7 +89,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
               'selected': false,
             });
           }
-          
+
           setState(() {
             _friends = loadedFriends;
           });
@@ -97,7 +99,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       }
     }
   }
-  
+
   // Create a new activity
   Future<void> _createActivity() async {
     if (_nameController.text.trim().isEmpty) {
@@ -106,27 +108,31 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       );
       return;
     }
-    
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
         // Create a new document with auto-generated ID
-        final activityRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('activities')
-            .doc();
-            
+        final activityRef =
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('activities')
+                .doc();
+
         // Prepare members data
-        final List<Map<String, dynamic>> members = _selectedMembers
-            .where((member) => member['selected'] == true)
-            .map((member) => {
-              'id': member['id'],
-              'name': member['name'],
-              'email': member['email'],
-            })
-            .toList();
-            
+        final List<Map<String, dynamic>> members =
+            _selectedMembers
+                .where((member) => member['selected'] == true)
+                .map(
+                  (member) => {
+                    'id': member['id'],
+                    'name': member['name'],
+                    'email': member['email'],
+                  },
+                )
+                .toList();
+
         // Create activity document
         await activityRef.set({
           'name': _nameController.text.trim(),
@@ -135,7 +141,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
           'createdAt': FieldValue.serverTimestamp(),
           'activity_id': activityRef.id,
         });
-        
+
         // Navigate back and show success message
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -143,21 +149,25 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         );
       } catch (e) {
         print('Error creating activity: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating activity: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error creating activity: $e')));
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.pink.shade100,
+        backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('Create Activity'),
+        elevation: 0,
+        title: const Text(
+          'Create Activity',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -173,55 +183,79 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
               controller: _nameController,
               decoration: InputDecoration(
                 labelText: 'Activity Name',
-                prefixIcon: Icon(Icons.celebration, color: AppTheme.primaryColor),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                prefixIcon: const Icon(
+                  Icons.celebration,
+                  color: Color(0xFFB19CD9),
                 ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFB19CD9),
+                    width: 2,
+                  ),
+                ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Description
             TextField(
               controller: _descriptionController,
               maxLines: 3,
               decoration: InputDecoration(
                 labelText: 'Description (optional)',
-                prefixIcon: Icon(Icons.description, color: AppTheme.primaryColor),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                prefixIcon: const Icon(
+                  Icons.description,
+                  color: Color(0xFFB19CD9),
                 ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFB19CD9),
+                    width: 2,
+                  ),
+                ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Members Section
             const Text(
-              'Members',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              'Participants',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             Text(
               'Select friends to include in this activity',
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Current User (always included)
             if (_selectedMembers.isNotEmpty)
               ListTile(
@@ -234,25 +268,19 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                 ),
                 title: const Text('You'),
                 subtitle: Text(_userEmail),
-                trailing: const Icon(
-                  Icons.check_circle,
-                  color: Colors.pink,
-                ),
+                trailing: const Icon(Icons.check_circle, color: Colors.pink),
               ),
-              
+
             const Divider(height: 32),
-            
+
             // Friends Section
             const Text(
               'Friends',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Friends List
             if (_friends.isEmpty)
               Center(
@@ -282,7 +310,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                     title: Text(friend['name']),
                     subtitle: Text(friend['email']),
                     trailing: Checkbox(
-                      activeColor: Colors.pink,
+                      activeColor: Color(0xFFB19CD9),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -290,13 +318,13 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                       onChanged: (value) {
                         setState(() {
                           _friends[index]['selected'] = value;
-                          
+
                           // Update selected members list
                           if (value == true) {
                             _selectedMembers.add(_friends[index]);
                           } else {
                             _selectedMembers.removeWhere(
-                              (member) => member['id'] == _friends[index]['id']
+                              (member) => member['id'] == _friends[index]['id'],
                             );
                           }
                         });
@@ -311,21 +339,21 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: ElevatedButton(
-            onPressed: _createActivity,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.pink.shade300,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ),
-            child: const Text(
-              'CREATE ACTIVITY',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+              onPressed: _createActivity,
+              child: const Text(
+                'CREATE ACTIVITY',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ),

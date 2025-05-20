@@ -46,19 +46,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Future<void> _fetchActivities() async {
     final user = FirebaseAuth.instance.currentUser!;
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('activities')
-        .get();
+    final snapshot =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('activities')
+            .get();
 
-    final activities = snapshot.docs.map((doc) {
-      return {
-        'id': doc.id,
-        'name': doc.data()['name'] ?? 'Unnamed Activity',
-        'friends': List<String>.from(doc.data()['friends'] ?? []),
-      };
-    }).toList();
+    final activities =
+        snapshot.docs.map((doc) {
+          return {
+            'id': doc.id,
+            'name': doc.data()['name'] ?? 'Unnamed Activity',
+            'friends': List<String>.from(doc.data()['friends'] ?? []),
+          };
+        }).toList();
 
     setState(() {
       userActivities = activities;
@@ -74,23 +76,23 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final members = ['You', ...friends];
     setState(() {
       allParticipants = members;
-      selectedParticipants = {
-        for (var name in members) name: name == 'You',
-      };
+      selectedParticipants = {for (var name in members) name: name == 'You'};
       paidBy = 'You';
     });
   }
 
   Future<void> _pickImage() async {
-    final pickedFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
     if (pickedFile != null) {
       setState(() => receiptImage = File(pickedFile.path));
     }
   }
 
   Future<void> _submitExpense() async {
-    if (!_formKey.currentState!.validate() || selectedActivityId == null) return;
+    if (!_formKey.currentState!.validate() || selectedActivityId == null)
+      return;
 
     final user = FirebaseAuth.instance.currentUser!;
     final expense = {
@@ -100,10 +102,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       'description': _descriptionController.text.trim(),
       'paid_by': paidBy,
       'split': splitMethod,
-      'participants': selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList(),
+      'participants':
+          selectedParticipants.entries
+              .where((entry) => entry.value)
+              .map((entry) => entry.key)
+              .toList(),
     };
 
     await FirebaseFirestore.instance
@@ -120,10 +123,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F0FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.pink.shade100,
-        title: const Text('Add Expense', style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).primaryColor,
+        elevation: 0,
+        title: const Text(
+          'Add Expense',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -131,22 +138,42 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: "Select Activity",
-                  prefixIcon: Icon(Icons.event),
+                  prefixIcon: const Icon(Icons.event, color: Color(0xFFB19CD9)),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
                 ),
                 value: selectedActivityId,
-                items: userActivities.map((activity) {
-                  return DropdownMenuItem<String>(
-                    value: activity['id'],
-                    child: Text(activity['name']!),
-                  );
-                }).toList(),
+                items:
+                    userActivities.map((activity) {
+                      return DropdownMenuItem<String>(
+                        value: activity['id'],
+                        child: Text(activity['name']!),
+                      );
+                    }).toList(),
                 onChanged: (value) {
-                  final selected = userActivities
-                      .firstWhere((act) => act['id'] == value);
+                  final selected = userActivities.firstWhere(
+                    (act) => act['id'] == value,
+                  );
                   setState(() {
                     selectedActivityId = value;
                     selectedActivityName = selected['name'];
@@ -154,22 +181,63 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   });
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                    labelText: "Title", prefixIcon: Icon(Icons.title)),
+                decoration: InputDecoration(
+                  labelText: "Title",
+                  prefixIcon: const Icon(Icons.title, color: Color(0xFFB19CD9)),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
+                ),
                 validator: (val) => val!.isEmpty ? "Enter a title" : null,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: "Amount", prefixIcon: Icon(Icons.attach_money)),
+                decoration: InputDecoration(
+                  labelText: "Amount",
+                  prefixIcon: const Icon(
+                    Icons.attach_money,
+                    color: Color(0xFFB19CD9),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
+                ),
                 validator: (val) => val!.isEmpty ? "Enter an amount" : null,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               TextFormField(
                 readOnly: true,
                 onTap: () async {
@@ -185,95 +253,191 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 },
                 decoration: InputDecoration(
                   labelText: "Date",
-                  prefixIcon: const Icon(Icons.date_range),
-                  hintText: DateFormat.yMd().format(selectedDate),
+                  prefixIcon: const Icon(
+                    Icons.date_range,
+                    color: Color(0xFFB19CD9),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
                 ),
                 controller: TextEditingController(
-                    text: DateFormat.yMd().format(selectedDate)),
+                  text: DateFormat.yMd().format(selectedDate),
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: "Description (optional)",
-                  prefixIcon: Icon(Icons.description),
+                  prefixIcon: const Icon(
+                    Icons.description,
+                    color: Color(0xFFB19CD9),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              ListTile(
-                leading: const Icon(Icons.receipt_long),
-                title: const Text("Tap to add a receipt image"),
-                subtitle:
-                    receiptImage != null ? const Text("Image selected") : null,
-                onTap: _pickImage,
-                shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border.all(color: Color(0xFFB19CD9)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.receipt_long,
+                    color: Color(0xFFB19CD9),
+                  ),
+                  title: const Text("Tap to add a receipt image"),
+                  subtitle:
+                      receiptImage != null
+                          ? const Text("Image selected")
+                          : null,
+                  onTap: _pickImage,
                 ),
               ),
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text("Paid By", style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 24),
+              const Text(
+                "Paid By",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               Column(
-                children: allParticipants
-                    .map((name) => RadioListTile<String>(
-                          title: Text(name),
-                          value: name,
-                          groupValue: paidBy,
-                          onChanged: (value) => setState(() => paidBy = value),
-                        ))
-                    .toList(),
+                children:
+                    allParticipants
+                        .map(
+                          (name) => RadioListTile<String>(
+                            title: Text(name),
+                            value: name,
+                            groupValue: paidBy,
+                            activeColor: Color(0xFFB19CD9),
+                            onChanged:
+                                (value) => setState(() => paidBy = value),
+                          ),
+                        )
+                        .toList(),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              const Text(
+                "Split",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Split", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      ChoiceChip(
-                        label: const Text("Equally"),
-                        selected: splitMethod == 'equally',
-                        onSelected: (_) => setState(() => splitMethod = 'equally'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("Unequally"),
-                        selected: splitMethod == 'unequally',
-                        onSelected: (_) => setState(() => splitMethod = 'unequally'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text("By %"),
-                        selected: splitMethod == 'percentage',
-                        onSelected: (_) => setState(() => splitMethod = 'percentage'),
-                      ),
-                    ],
+                  ChoiceChip(
+                    label: const Text("Equally"),
+                    selected: splitMethod == 'equally',
+                    selectedColor: Color(0xFFF5A9C1),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color:
+                          splitMethod == 'equally'
+                              ? Colors.white
+                              : Color(0xFFB19CD9),
+                      fontWeight: FontWeight.bold,
+                    ),
+                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    onSelected: (_) => setState(() => splitMethod = 'equally'),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text("Unequally"),
+                    selected: splitMethod == 'unequally',
+                    selectedColor: Color(0xFFF5A9C1),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color:
+                          splitMethod == 'unequally'
+                              ? Colors.white
+                              : Color(0xFFB19CD9),
+                      fontWeight: FontWeight.bold,
+                    ),
+                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    onSelected:
+                        (_) => setState(() => splitMethod = 'unequally'),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text("By %"),
+                    selected: splitMethod == 'percentage',
+                    selectedColor: Color(0xFFF5A9C1),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color:
+                          splitMethod == 'percentage'
+                              ? Colors.white
+                              : Color(0xFFB19CD9),
+                      fontWeight: FontWeight.bold,
+                    ),
+                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    onSelected:
+                        (_) => setState(() => splitMethod = 'percentage'),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text("Participants", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              const Text(
+                "Participants",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              ...allParticipants.map((name) => CheckboxListTile(
-                    title: Text(name),
-                    value: selectedParticipants[name] ?? false,
-                    onChanged: (value) =>
-                        setState(() => selectedParticipants[name] = value!),
-                  )),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pink.shade100,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(50),
+              ...allParticipants.map(
+                (name) => CheckboxListTile(
+                  title: Text(name),
+                  value: selectedParticipants[name] ?? false,
+                  activeColor: Color(0xFFB19CD9),
+                  onChanged:
+                      (value) =>
+                          setState(() => selectedParticipants[name] = value!),
                 ),
-                onPressed: _submitExpense,
-                child: const Text("ADD EXPENSE"),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _submitExpense,
+                  child: const Text(
+                    "ADD EXPENSE",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
             ],
           ),

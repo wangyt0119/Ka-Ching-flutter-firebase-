@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
+
+import 'edit_profile_screen.dart';
+import '../settings/settings_screen.dart';
+import 'help_support_screen.dart';
 import '../../services/currency_service.dart';
+import '../help/help_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -225,7 +230,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
-            onPressed: _showEditProfileDialog,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => EditProfileScreen(currentName: fullName),
+                ),
+              ).then((updated) {
+                if (updated == true) {
+                  _fetchUserData();
+                }
+              });
+            },
           ),
         ],
       ),
@@ -256,8 +273,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : fullName.isNotEmpty
                       ? fullName[0].toUpperCase()
                       : 'U',
-                  style: const TextStyle(
-                    color: Color(0xFF6A0DAD),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
                   ),
@@ -276,8 +293,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Text(
                           fullName,
-                          style: const TextStyle(
-                            color: Color(0xFF6A0DAD),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.secondary,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
@@ -285,10 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 8),
                         Text(
                           email,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       ],
                     ),
@@ -301,8 +315,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           // Settings, Help, Currency, Logout options
-          _buildMenuOption(Icons.settings, 'Settings', Colors.deepPurple),
-          _buildMenuOption(Icons.help, 'Help & Support', Colors.deepPurple),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.settings,
+              'Settings',
+              Theme.of(context).colorScheme.secondary,
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HelpScreen()),
+              );
+            },
+            child: _buildMenuOption(
+              Icons.help,
+              'Help & Support',
+              Theme.of(context).colorScheme.secondary,
+            ),
+          ),
           _buildCurrencyOption(),
           _buildLogoutOption(),
         ],
@@ -313,19 +351,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildMenuOption(IconData icon, String title, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 16),
-          Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+      child: GestureDetector(
+        onTap: () {
+          if (title == 'Settings') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            );
+          } else if (title == 'Help & Support') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const HelpScreen()),
+            );
+          }
+        },
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -337,7 +390,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onTap: _showCurrencyDialog,
         child: Row(
           children: [
-            Icon(Icons.currency_exchange, color: Colors.deepPurple, size: 24),
+            Icon(
+              Icons.currency_exchange,
+              color: Theme.of(context).colorScheme.secondary,
+              size: 24,
+            ),
             const SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,14 +402,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   'Change Currency',
                   style: TextStyle(
-                    color: Colors.deepPurple,
+                    color: Theme.of(context).colorScheme.secondary,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                const SizedBox(width: 16),
                 Text(
                   'Currently: $selectedCurrency',
-                  style: TextStyle(color: Colors.deepPurple, fontSize: 12),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -366,15 +428,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: GestureDetector(
-        onTap: _logout, // Add the logout functionality here
+        onTap: _logout,
         child: Row(
           children: [
-            Icon(Icons.logout, color: Colors.redAccent, size: 24),
+            Icon(
+              Icons.logout,
+              color: Theme.of(context).colorScheme.error,
+              size: 24,
+            ),
             const SizedBox(width: 16),
             Text(
               'Logout',
               style: TextStyle(
-                color: Colors.redAccent,
+                color: Theme.of(context).colorScheme.error,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),

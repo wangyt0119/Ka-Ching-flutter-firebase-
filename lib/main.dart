@@ -1,89 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_gate.dart';
-import 'theme/app_theme.dart';
+import 'services/theme_service.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  runApp(const MyApp());
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final prefs = await SharedPreferences.getInstance();
+  runApp(MyApp(prefs: prefs));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Your App Name',
-      theme: AppTheme.lightTheme, // Using your custom AppTheme here
-      debugShowCheckedModeBanner: false,
-      home: const AuthGate(),
-    );
-  }
-}
+  final SharedPreferences prefs;
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
+  const MyApp({super.key, required this.prefs});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        title: Text(widget.title),
-        elevation: 0,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-              style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 16,
-              ),
+    return ChangeNotifierProvider(
+      create: (context) => ThemeService(prefs),
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          return MaterialApp(
+            title: 'KaChing',
+            theme: themeService.getTheme().copyWith(
+              textTheme: themeService.getTextTheme(context),
             ),
-            Text(
-              '$_counter',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        backgroundColor: AppTheme.accentColor,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        child: const Icon(Icons.add),
+            debugShowCheckedModeBanner: false,
+            home: const AuthGate(),
+          );
+        },
       ),
     );
   }
