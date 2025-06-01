@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'screens/home/admin_home.dart';
+import 'screens/admin/dashboard/admin_dashboard.dart';
 import 'screens/home/user_home.dart';
 import 'screens/auth/custom_register_screen.dart';
 import 'screens/auth/custom_login_screen.dart';

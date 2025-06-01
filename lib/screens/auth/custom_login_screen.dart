@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import 'custom_register_screen.dart';
 import 'custom_forgot_password_screen.dart';
-import '../home/admin_home.dart';
+import '../admin/dashboard/admin_dashboard.dart';
 import '../home/user_home.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

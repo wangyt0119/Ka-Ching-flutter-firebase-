@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
-import '../home/admin_home.dart';
+import '../admin/dashboard/admin_dashboard.dart';
 import '../home/user_home.dart';
 
 class CustomRegisterScreen extends StatefulWidget {
@@ -97,6 +97,7 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
         'email': emailController.text.trim(),
         'role': selectedRole,
         'currency': 'MYR',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (selectedRole == 'admin') {

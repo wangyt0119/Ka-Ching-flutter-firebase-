@@ -31,6 +31,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'email': emailController.text,
         'role': selectedRole,
         'currency': 'MYR',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       // Navigate to home page after successful registration
