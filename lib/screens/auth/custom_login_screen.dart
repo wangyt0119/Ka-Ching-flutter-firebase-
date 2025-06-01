@@ -150,7 +150,7 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                 .get();
         final role = doc.data()?['role'] ?? 'user';
         if (!doc.exists) {
-          // If user doc doesn't exist, create it
+          // If user doc doesn't exist, create it with default fields
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -158,6 +158,8 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                 'full_name': user.displayName ?? '',
                 'email': user.email,
                 'role': 'user',
+                'currency': 'MYR',
+                'createdAt': FieldValue.serverTimestamp(),
               });
         }
         if (role == 'admin') {
