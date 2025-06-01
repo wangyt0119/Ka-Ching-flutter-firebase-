@@ -15,6 +15,7 @@ class AdminHomePage extends StatefulWidget {
 class _AdminHomePageState extends State<AdminHomePage> {
   int _selectedIndex = 0;
   bool _isDaily = true; // For switching between daily and weekly view
+  bool _isCollapsed = false; // For collapsing sidebar on mobile
 
   final List<Widget> _pages = [];
 
@@ -46,45 +47,330 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_getPageTitle()),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: () => _logout(context),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
+      body: Row(
+        children: [
+          // Side Navigation
+          _buildSideNavigation(isMobile),
+          
+          // Main Content Area
+          Expanded(
+            child: Column(
+              children: [
+                // Top App Bar
+                _buildTopAppBar(),
+                
+                // Page Content
+                Expanded(
+                  child: _pages[_selectedIndex],
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.primaryColor,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+    );
+  }
+
+  Widget _buildSideNavigation(bool isMobile) {
+    final sidebarWidth = _isCollapsed ? 70.0 : (isMobile ? 250.0 : 280.0);
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: sidebarWidth,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(2, 0),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header Section
+            Container(
+              height: 80,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.admin_panel_settings,
+                      color: AppTheme.primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                  if (!_isCollapsed) ...[
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Admin Panel',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (isMobile)
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _isCollapsed = !_isCollapsed;
+                        });
+                      },
+                      icon: Icon(
+                        _isCollapsed ? Icons.menu : Icons.menu_open,
+                        color: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            
+            // Navigation Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                children: [
+                  _buildNavItem(
+                    index: 0,
+                    icon: Icons.dashboard,
+                    label: 'Dashboard',
+                    isSelected: _selectedIndex == 0,
+                  ),
+                  _buildNavItem(
+                    index: 1,
+                    icon: Icons.people,
+                    label: 'Users',
+                    isSelected: _selectedIndex == 1,
+                  ),
+                  _buildNavItem(
+                    index: 2,
+                    icon: Icons.local_activity,
+                    label: 'Activities',
+                    isSelected: _selectedIndex == 2,
+                  ),
+                  _buildNavItem(
+                    index: 3,
+                    icon: Icons.person,
+                    label: 'Profile',
+                    isSelected: _selectedIndex == 3,
+                  ),
+                  
+                  // Divider
+                  if (!_isCollapsed) ...[
+                    const SizedBox(height: 20),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Divider(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  
+                  // Logout Button
+                  _buildNavItem(
+                    index: -1,
+                    icon: Icons.logout,
+                    label: 'Logout',
+                    isSelected: false,
+                    isLogout: true,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Footer
+            if (!_isCollapsed)
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Version 1.0.0',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    bool isLogout = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (isLogout) {
+              _logout(context);
+            } else {
+              setState(() {
+                _selectedIndex = index;
+              });
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isSelected 
+                ? AppTheme.primaryColor.withOpacity(0.1)
+                : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: isSelected
+                ? Border.all(color: AppTheme.primaryColor.withOpacity(0.3))
+                : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected 
+                    ? AppTheme.primaryColor
+                    : (isLogout ? Colors.red : Colors.grey[600]),
+                  size: 24,
+                ),
+                if (!_isCollapsed) ...[
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: isSelected 
+                          ? AppTheme.primaryColor
+                          : (isLogout ? Colors.red : Colors.grey[800]),
+                        fontWeight: isSelected 
+                          ? FontWeight.w600 
+                          : FontWeight.w500,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Users',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.local_activity),
-            label: 'Activities',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopAppBar() {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Text(
+              _getPageTitle(),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            
+            // Admin User Info
+            StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  final user = snapshot.data!;
+                  return Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: AppTheme.primaryColor,
+                        child: Text(
+                          user.email?.substring(0, 1).toUpperCase() ?? 'A',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Admin',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            user.email ?? '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -98,7 +384,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       case 2:
         return 'Activities Management';
       case 3:
-        return 'Profile';
+        return 'Profile Settings';
       default:
         return 'Admin Panel';
     }
