@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -36,7 +37,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String selectedCurrency = 'USD'; // default
   DateTime selectedDate = DateTime.now();
-  File? receiptImage;
+  File? _receiptImage;
+  String? _base64Image;
+
   String splitMethod = 'equally';
   String? paidBy = 'You';
 
@@ -155,13 +158,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-    );
-    if (pickedFile != null) {
-      setState(() => receiptImage = File(pickedFile.path));
-    }
+  final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+
+  if (pickedFile != null) {
+    final imageBytes = await pickedFile.readAsBytes();
+    setState(() {
+      _receiptImage = File(pickedFile.path);
+      _base64Image = base64Encode(imageBytes);
+    });
   }
+}
+
 
   Future<void> _submitExpense() async {
     if (!_formKey.currentState!.validate() || selectedActivityId == null)
@@ -180,6 +187,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           .where((entry) => entry.value)
           .map((entry) => entry.key)
           .toList(),
+      if (_base64Image != null) 'receipt_image': _base64Image, 
+
     };
 
     await _firestore
@@ -252,6 +261,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   borderRadius: BorderRadius.circular(12),
                   color: Theme.of(context).cardColor,
                 ),
+                
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -400,24 +410,36 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
               Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  border: Border.all(color: Color(0xFFB19CD9)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.receipt_long,
-                    color: Color(0xFFB19CD9),
-                  ),
-                  title: const Text("Tap to add a receipt image"),
-                  subtitle:
-                      receiptImage != null
-                          ? const Text("Image selected")
-                          : null,
-                  onTap: _pickImage,
-                ),
-              ),
+  decoration: BoxDecoration(
+    color: Theme.of(context).cardColor,
+    border: Border.all(color: Color(0xFFB19CD9)),
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      ListTile(
+        leading: const Icon(
+          Icons.receipt_long,
+          color: Color(0xFFB19CD9),
+        ),
+        title: const Text("Tap to add a receipt image"),
+        subtitle: _receiptImage != null ? const Text("Image selected") : null,
+        onTap: _pickImage,
+      ),
+      if (_base64Image != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Image.memory(
+            base64Decode(_base64Image!),
+            height: 200,
+            fit: BoxFit.cover,
+          ),
+        ),
+    ],
+  ),
+),
+
               const SizedBox(height: 24),
               const Text(
                 "Paid By",
