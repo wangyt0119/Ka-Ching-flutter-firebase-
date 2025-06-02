@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../services/currency_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String activityId;
@@ -26,10 +27,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   String? selectedActivityId;
   String? selectedActivityName;
   List<Map<String, dynamic>> userActivities = [];
 
+  String selectedCurrency = 'USD'; // default
   DateTime selectedDate = DateTime.now();
   File? receiptImage;
   String splitMethod = 'equally';
@@ -42,25 +47,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void initState() {
     super.initState();
     _fetchActivities();
+    _loadUserCurrency();
   }
 
   Future<void> _fetchActivities() async {
-    final user = FirebaseAuth.instance.currentUser!;
-    final snapshot =
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('activities')
-            .get();
+    final user = _auth.currentUser!;
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('activities')
+        .get();
 
-    final activities =
-        snapshot.docs.map((doc) {
-          return {
-            'id': doc.id,
-            'name': doc.data()['name'] ?? 'Unnamed Activity',
-            'friends': List<String>.from(doc.data()['friends'] ?? []),
-          };
-        }).toList();
+    final activities = snapshot.docs.map((doc) {
+      return {
+        'id': doc.id,
+        'name': doc.data()['name'] ?? 'Unnamed Activity',
+        'friends': List<String>.from(doc.data()['friends'] ?? []),
+      };
+    }).toList();
 
     setState(() {
       userActivities = activities;
@@ -70,6 +74,75 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         _setParticipants(activities[0]['friends']);
       }
     });
+  }
+
+  Future<void> _loadUserCurrency() async {
+    final currencyService = CurrencyService();
+    final currency = await currencyService.getSelectedCurrency();
+    setState(() {
+      selectedCurrency = currency.code;
+    });
+  }
+
+  Future<void> _updateCurrency(String newCurrency) async {
+    try {
+      final User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        await _firestore.collection('users').doc(currentUser.uid).update({
+          'currency': newCurrency,
+        });
+
+        final currencyService = CurrencyService();
+        final currency =
+            currencyService.getCurrencyByCode(newCurrency) ??
+                currencyService.getDefaultCurrency();
+        await currencyService.setSelectedCurrency(currency);
+
+        setState(() {
+          selectedCurrency = newCurrency;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Currency updated successfully')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating currency: $e')),
+      );
+    }
+  }
+
+  void _showCurrencyDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Currency'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: CurrencyService.supportedCurrencies.length,
+            itemBuilder: (context, index) {
+              final currency =
+                  CurrencyService.supportedCurrencies.keys.elementAt(index);
+              final currencyInfo =
+                  CurrencyService.supportedCurrencies[currency];
+              return ListTile(
+                title: Text(currencyInfo ?? currency),
+                trailing: currency == selectedCurrency
+                    ? const Icon(Icons.check, color: Color(0xFFF5A9C1))
+                    : null,
+                onTap: () {
+                  _updateCurrency(currency);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   void _setParticipants(List<String> friends) {
@@ -94,22 +167,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     if (!_formKey.currentState!.validate() || selectedActivityId == null)
       return;
 
-    final user = FirebaseAuth.instance.currentUser!;
+    final user = _auth.currentUser!;
     final expense = {
       'title': _titleController.text.trim(),
       'amount': double.tryParse(_amountController.text.trim()) ?? 0,
+      'currency': selectedCurrency,
       'date': DateFormat.yMMMd().format(selectedDate),
       'description': _descriptionController.text.trim(),
       'paid_by': paidBy,
       'split': splitMethod,
-      'participants':
-          selectedParticipants.entries
-              .where((entry) => entry.value)
-              .map((entry) => entry.key)
-              .toList(),
+      'participants': selectedParticipants.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList(),
     };
 
-    await FirebaseFirestore.instance
+    await _firestore
         .collection('users')
         .doc(user.uid)
         .collection('activities')
@@ -140,6 +213,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Activity Dropdown
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   labelText: "Select Activity",
@@ -150,26 +224,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFB19CD9)),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
-                      width: 2,
-                    ),
-                  ),
                 ),
                 value: selectedActivityId,
-                items:
-                    userActivities.map((activity) {
-                      return DropdownMenuItem<String>(
-                        value: activity['id'],
-                        child: Text(activity['name']!),
-                      );
-                    }).toList(),
+                items: userActivities.map((activity) {
+                  return DropdownMenuItem<String>(
+                    value: activity['id'],
+                    child: Text(activity['name']!),
+                  );
+                }).toList(),
                 onChanged: (value) {
                   final selected = userActivities.firstWhere(
                     (act) => act['id'] == value,
@@ -182,6 +244,35 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 },
               ),
               const SizedBox(height: 16),
+              // Currency
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Color(0xFFB19CD9)),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).cardColor,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Currency: $selectedCurrency',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFB19CD9)),
+                    ),
+                    TextButton(
+                      onPressed: _showCurrencyDialog,
+                      child: const Text(
+                        'Change',
+                        style: TextStyle(color: Color(0xFFF5A9C1)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
               TextFormField(
                 controller: _titleController,
                 decoration: InputDecoration(
