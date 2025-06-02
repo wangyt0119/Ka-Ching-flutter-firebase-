@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'transaction_details.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
@@ -229,8 +230,16 @@ List<QueryDocumentSnapshot> _filterActivities(List<QueryDocumentSnapshot> docs) 
                                 },
                               ),
                         onTap: () {
-                          // Handle activity tap
-                        },
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TransactionDetailsScreen(
+                              activity_id: doc.id,
+                              activityData: doc.data() as Map<String, dynamic>,
+                            ),
+                          ),
+                        );
+                      },
                       ),
                     );
                   },
