@@ -2,8 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../theme/app_theme.dart';
 
-class UsersScreen extends StatelessWidget {
+class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
+
+  @override
+  State<UsersScreen> createState() => _UsersScreenState();
+}
+
+class _UsersScreenState extends State<UsersScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchTerm = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchTerm = _searchController.text.toLowerCase().trim();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,36 +38,20 @@ class UsersScreen extends StatelessWidget {
       padding: EdgeInsets.all(isMobile ? 16 : 24),
       child: Column(
         children: [
-          // Search and Filter Bar
-          if (!isMobile) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search users...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-          ] else ...[
-            // Mobile search
-            TextField(
-              decoration: InputDecoration(
-                hintText: 'Search users...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          // Search Bar
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search users...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 16),
+
+          if (isMobile)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -56,9 +64,9 @@ class UsersScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-          
+
+          const SizedBox(height: 16),
+
           // Users List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -80,7 +88,17 @@ class UsersScreen extends StatelessWidget {
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                final docs = snapshot.data?.docs ?? [];
+
+                // Filter users by searchTerm (name or email)
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final name = data['full_name']?.toString().toLowerCase() ?? '';
+                  final email = data['email']?.toString().toLowerCase() ?? '';
+                  return name.contains(_searchTerm) || email.contains(_searchTerm);
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
                   return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -97,15 +115,15 @@ class UsersScreen extends StatelessWidget {
                 }
 
                 return ListView.builder(
-                  itemCount: snapshot.data!.docs.length,
+                  itemCount: filteredDocs.length,
                   itemBuilder: (context, index) {
-                    final doc = snapshot.data!.docs[index];
+                    final doc = filteredDocs[index];
                     final data = doc.data() as Map<String, dynamic>;
                     final fullName = data['full_name']?.toString() ?? 'Unknown User';
                     final email = data['email']?.toString() ?? 'No email';
                     final role = data['role']?.toString() ?? 'user';
                     final createdAt = data['createdAt'] as Timestamp?;
-                    
+
                     return Card(
                       margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
                       child: ListTile(
@@ -146,9 +164,9 @@ class UsersScreen extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: role == 'admin' 
-                                  ? Colors.red.withOpacity(0.1)
-                                  : Colors.green.withOpacity(0.1),
+                                color: role == 'admin'
+                                    ? Colors.red.withOpacity(0.1)
+                                    : Colors.green.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -192,10 +210,11 @@ class UsersScreen extends StatelessWidget {
                             ],
                           ],
                         ),
-                        onTap: isMobile ? () {
-                          // Show bottom sheet with user details on mobile
-                          _showUserDetails(context, data);
-                        } : null,
+                        onTap: isMobile
+                            ? () {
+                                _showUserDetails(context, data);
+                              }
+                            : null,
                       ),
                     );
                   },

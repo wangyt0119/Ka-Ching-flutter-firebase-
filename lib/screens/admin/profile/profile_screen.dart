@@ -161,32 +161,32 @@ class ProfileScreen extends StatelessWidget {
                         children: [
                           _buildSettingsSection('Account Settings', [
                             _buildSettingsTile(Icons.lock, 'Change Password', () {}),
-                            _buildSettingsTile(Icons.email, 'Email Preferences', () {}),
-                            _buildSettingsTile(Icons.security, 'Two-Factor Authentication', () {}),
+                            // _buildSettingsTile(Icons.email, 'Email Preferences', () {}),
+                            // _buildSettingsTile(Icons.security, 'Two-Factor Authentication', () {}),
                           ]),
-                          const SizedBox(height: 24),
-                          _buildSettingsSection('System Settings', [
-                            _buildSettingsTile(Icons.notifications, 'Notifications', () {}),
-                            _buildSettingsTile(Icons.backup, 'Data Backup', () {}),
-                            _buildSettingsTile(Icons.update, 'System Updates', () {}),
-                          ]),
+                          // const SizedBox(height: 24),
+                          // _buildSettingsSection('System Settings', [
+                          //   _buildSettingsTile(Icons.notifications, 'Notifications', () {}),
+                          //   _buildSettingsTile(Icons.backup, 'Data Backup', () {}),
+                          //   _buildSettingsTile(Icons.update, 'System Updates', () {}),
+                          // ]),
                         ],
                       ),
                     ),
                     const SizedBox(width: 24),
-                    Expanded(
-                      child: _buildSettingsSection('Support', [
-                        _buildSettingsTile(Icons.help, 'Help Center', () {}),
-                        _buildSettingsTile(Icons.bug_report, 'Report Issue', () {}),
-                        _buildSettingsTile(Icons.info, 'About', () {}),
-                        _buildSettingsTile(Icons.logout, 'Logout', () async {
-                          await FirebaseAuth.instance.signOut();
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (context) => const AuthGate()),
-                          );
-                        }, isDestructive: true),
-                      ]),
-                    ),
+                    // Expanded(
+                    //   child: _buildSettingsSection('Support', [
+                    //     _buildSettingsTile(Icons.help, 'Help Center', () {}),
+                    //     _buildSettingsTile(Icons.bug_report, 'Report Issue', () {}),
+                    //     _buildSettingsTile(Icons.info, 'About', () {}),
+                    //     _buildSettingsTile(Icons.logout, 'Logout', () async {
+                    //       await FirebaseAuth.instance.signOut();
+                    //       Navigator.of(context).pushReplacement(
+                    //         MaterialPageRoute(builder: (context) => const AuthGate()),
+                    //       );
+                    //     }, isDestructive: true),
+                    //   ]),
+                    // ),
                   ],
                 ),
               ],
