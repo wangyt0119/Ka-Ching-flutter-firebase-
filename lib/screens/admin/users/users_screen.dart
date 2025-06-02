@@ -51,20 +51,6 @@ class _UsersScreenState extends State<UsersScreen> {
           ),
           const SizedBox(height: 16),
 
-          if (isMobile)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add),
-                label: const Text('Add User'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-
           const SizedBox(height: 16),
 
           // Users List
