@@ -236,6 +236,7 @@ List<QueryDocumentSnapshot> _filterActivities(List<QueryDocumentSnapshot> docs) 
                             builder: (context) => TransactionDetailsScreen(
                               activity_id: doc.id,
                               activityData: doc.data() as Map<String, dynamic>,
+                              ownerUid: (doc.data() as Map<String, dynamic>)['createdBy'],
                             ),
                           ),
                         );

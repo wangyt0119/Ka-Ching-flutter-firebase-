@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // <-- Add this
 
 class TransactionDetailsScreen extends StatelessWidget {
   final String activity_id;
   final Map<String, dynamic> activityData;
-
+  final String ownerUid;
   const TransactionDetailsScreen({
     Key? key,
     required this.activity_id,
     required this.activityData,
+    required this.ownerUid,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final activityName = activityData['name'] ?? 'Activity';
+
+    // Get current Firebase user
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(child: Text("User not logged in")),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -21,19 +32,21 @@ class TransactionDetailsScreen extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collectionGroup('transactions')
-            .where('activity_id', isEqualTo: activity_id)
+            .collection('users')
+            .doc(ownerUid)
+            .collection('activities')
+            .doc(activity_id)
+            .collection('transactions')
             .orderBy('date', descending: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Text('Error: ${snapshot.error}'),
-            );
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -48,12 +61,13 @@ class TransactionDetailsScreen extends StatelessWidget {
               final data = transactions[index].data() as Map<String, dynamic>;
               final title = data['title'] ?? 'Untitled';
               final amount = data['amount'] ?? 0;
-              final date = (data['date'] as Timestamp?)?.toDate();
+              final dateStr = data['date']?.toString();
+
 
               return ListTile(
                 leading: const Icon(Icons.receipt_long),
                 title: Text(title),
-                subtitle: Text(date != null ? _formatDate(date) : 'No date'),
+                subtitle: Text(dateStr ?? 'No date'),
                 trailing: Text('RM ${amount.toStringAsFixed(2)}'),
               );
             },

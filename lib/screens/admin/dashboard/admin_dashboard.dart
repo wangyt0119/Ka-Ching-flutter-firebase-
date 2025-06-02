@@ -188,22 +188,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  'Version 1.0.0',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -349,22 +333,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ),
                 const SizedBox(height: 20),
                 _buildNavItem(-1, Icons.logout, 'Logout', false, isLogout: true),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  'Version 1.0.0',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
               ],
             ),
           ),

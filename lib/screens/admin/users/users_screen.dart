@@ -293,7 +293,6 @@ class _UsersScreenState extends State<UsersScreen> {
                   ),
                   const SizedBox(height: 24),
                   _buildDetailRow('Role', data['role']?.toString() ?? 'user'),
-                  _buildDetailRow('Phone', data['phone']?.toString() ?? 'Not provided'),
                   if (data['createdAt'] != null)
                     _buildDetailRow('Joined', _formatDate((data['createdAt'] as Timestamp).toDate())),
                   const SizedBox(height: 24),
