@@ -4,6 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../auth_gate.dart';
 import '../../../theme/app_theme.dart';
+import '../profile/profile_screen.dart';
+import '../activity/activity_screen.dart';
+import '../users/users_screen.dart';
+import 'chartSection.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -14,8 +18,9 @@ class AdminHomePage extends StatefulWidget {
 
 class _AdminHomePageState extends State<AdminHomePage> {
   int _selectedIndex = 0;
-  bool _isDaily = true; // For switching between daily and weekly view
-  bool _isCollapsed = false; // For collapsing sidebar on mobile
+  bool _isDaily = true;
+  bool _isDrawerOpen = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final List<Widget> _pages = [];
 
@@ -24,9 +29,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
     super.initState();
     _pages.addAll([
       _DashboardPage(isDaily: _isDaily, onToggle: _toggleChartView),
-      const _UsersPage(),
-      const _ActivitiesPage(),
-      const _ProfilePage(),
+      const UsersScreen(),
+      const ActivityScreen(),
+      const ProfileScreen(),
     ]);
   }
 
@@ -37,7 +42,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
     });
   }
 
-  // Logout function
   Future<void> _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
     Navigator.of(context).pushReplacement(
@@ -49,23 +53,153 @@ class _AdminHomePageState extends State<AdminHomePage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+    final isTablet = screenWidth >= 768 && screenWidth < 1024;
 
+    if (isMobile) {
+      return _buildMobileLayout();
+    } else {
+      return _buildDesktopLayout(isTablet);
+    }
+  }
+
+  Widget _buildMobileLayout() {
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text(
+          _getPageTitle(),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  final user = snapshot.data!;
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: Text(
+                      user.email?.substring(0, 1).toUpperCase() ?? 'A',
+                      style: const TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ],
+      ),
+      drawer: _buildMobileDrawer(),
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildDesktopLayout(bool isTablet) {
     return Scaffold(
       body: Row(
         children: [
-          // Side Navigation
-          _buildSideNavigation(isMobile),
-          
-          // Main Content Area
+          _buildSideNavigation(isTablet),
           Expanded(
             child: Column(
               children: [
-                // Top App Bar
                 _buildTopAppBar(),
-                
-                // Page Content
-                Expanded(
-                  child: _pages[_selectedIndex],
+                Expanded(child: _pages[_selectedIndex]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          Container(
+            height: 120,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: AppTheme.primaryColor,
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.admin_panel_settings,
+                        color: AppTheme.primaryColor,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Admin Panel',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                _buildDrawerItem(0, Icons.dashboard, 'Dashboard'),
+                _buildDrawerItem(1, Icons.people, 'Users'),
+                _buildDrawerItem(2, Icons.local_activity, 'Activities'),
+                _buildDrawerItem(3, Icons.person, 'Profile'),
+                const Divider(height: 32),
+                _buildDrawerItem(-1, Icons.logout, 'Logout', isLogout: true),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  'Version 1.0.0',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -75,166 +209,171 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  Widget _buildSideNavigation(bool isMobile) {
-    final sidebarWidth = _isCollapsed ? 70.0 : (isMobile ? 250.0 : 280.0);
+  Widget _buildDrawerItem(int index, IconData icon, String label, {bool isLogout = false}) {
+    final isSelected = _selectedIndex == index && !isLogout;
     
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected 
+          ? AppTheme.primaryColor
+          : (isLogout ? Colors.red : Colors.grey[600]),
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected 
+            ? AppTheme.primaryColor
+            : (isLogout ? Colors.red : Colors.grey[800]),
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
+      selected: isSelected,
+      selectedTileColor: AppTheme.primaryColor.withOpacity(0.1),
+      onTap: () {
+        Navigator.pop(context);
+        if (isLogout) {
+          _logout(context);
+        } else {
+          setState(() {
+            _selectedIndex = index;
+          });
+        }
+      },
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return BottomNavigationBar(
+      currentIndex: _selectedIndex,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: AppTheme.primaryColor,
+      unselectedItemColor: Colors.grey,
+      onTap: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.people),
+          label: 'Users',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.local_activity),
+          label: 'Activities',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSideNavigation(bool isTablet) {
+    final sidebarWidth = isTablet ? 240.0 : 280.0;
+    
+    return Container(
       width: sidebarWidth,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(2, 0),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Header Section
-            Container(
-              height: 80,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryColor.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings,
-                      color: AppTheme.primaryColor,
-                      size: 24,
-                    ),
-                  ),
-                  if (!_isCollapsed) ...[
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Admin Panel',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (isMobile)
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _isCollapsed = !_isCollapsed;
-                        });
-                      },
-                      icon: Icon(
-                        _isCollapsed ? Icons.menu : Icons.menu_open,
-                        color: Colors.white,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            
-            // Navigation Items
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  _buildNavItem(
-                    index: 0,
-                    icon: Icons.dashboard,
-                    label: 'Dashboard',
-                    isSelected: _selectedIndex == 0,
-                  ),
-                  _buildNavItem(
-                    index: 1,
-                    icon: Icons.people,
-                    label: 'Users',
-                    isSelected: _selectedIndex == 1,
-                  ),
-                  _buildNavItem(
-                    index: 2,
-                    icon: Icons.local_activity,
-                    label: 'Activities',
-                    isSelected: _selectedIndex == 2,
-                  ),
-                  _buildNavItem(
-                    index: 3,
-                    icon: Icons.person,
-                    label: 'Profile',
-                    isSelected: _selectedIndex == 3,
-                  ),
-                  
-                  // Divider
-                  if (!_isCollapsed) ...[
-                    const SizedBox(height: 20),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Divider(),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  
-                  // Logout Button
-                  _buildNavItem(
-                    index: -1,
-                    icon: Icons.logout,
-                    label: 'Logout',
-                    isSelected: false,
-                    isLogout: true,
-                  ),
-                ],
-              ),
-            ),
-            
-            // Footer
-            if (!_isCollapsed)
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Version 1.0.0',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: 80,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor,
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryColor.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-          ],
-        ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.admin_panel_settings,
+                    color: AppTheme.primaryColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Admin Panel',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                _buildNavItem(0, Icons.dashboard, 'Dashboard', _selectedIndex == 0),
+                _buildNavItem(1, Icons.people, 'Users', _selectedIndex == 1),
+                _buildNavItem(2, Icons.local_activity, 'Activities', _selectedIndex == 2),
+                _buildNavItem(3, Icons.person, 'Profile', _selectedIndex == 3),
+                const SizedBox(height: 20),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(),
+                ),
+                const SizedBox(height: 20),
+                _buildNavItem(-1, Icons.logout, 'Logout', false, isLogout: true),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  'Version 1.0.0',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    bool isLogout = false,
-  }) {
+  Widget _buildNavItem(int index, IconData icon, String label, bool isSelected, {bool isLogout = false}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Material(
@@ -270,23 +409,21 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     : (isLogout ? Colors.red : Colors.grey[600]),
                   size: 24,
                 ),
-                if (!_isCollapsed) ...[
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: isSelected 
-                          ? AppTheme.primaryColor
-                          : (isLogout ? Colors.red : Colors.grey[800]),
-                        fontWeight: isSelected 
-                          ? FontWeight.w600 
-                          : FontWeight.w500,
-                        fontSize: 16,
-                      ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: isSelected 
+                        ? AppTheme.primaryColor
+                        : (isLogout ? Colors.red : Colors.grey[800]),
+                      fontWeight: isSelected 
+                        ? FontWeight.w600 
+                        : FontWeight.w500,
+                      fontSize: 16,
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -321,8 +458,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ),
             ),
             const Spacer(),
-            
-            // Admin User Info
             StreamBuilder<User?>(
               stream: FirebaseAuth.instance.authStateChanges(),
               builder: (context, snapshot) {
@@ -400,41 +535,43 @@ class _DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth >= 1024;
+    final isMobile = screenWidth < 768;
+    final isTablet = screenWidth >= 768 && screenWidth < 1024;
     
     return SingleChildScrollView(
-      padding: EdgeInsets.all(isDesktop ? 24 : 16),
+      padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 16 : 24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Statistics Cards
           const _StatisticsSection(),
-          SizedBox(height: isDesktop ? 32 : 24),
+          SizedBox(height: isMobile ? 16 : (isTablet ? 20 : 32)),
           
-          if (isDesktop) ...[
+          if (isMobile) ...[
+            // Mobile Layout - Stacked
+            ChartSection(isDaily: isDaily, onToggle: onToggle), // Changed from _ChartSection
+            const SizedBox(height: 16),
+            const _RecentUsersSection(),
+          ] else if (isTablet) ...[
+            // Tablet Layout - Stacked but with more spacing
+            ChartSection(isDaily: isDaily, onToggle: onToggle), // Changed from _ChartSection
+            const SizedBox(height: 20),
+            const _RecentUsersSection(),
+          ] else ...[
             // Desktop Layout - Side by side
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Recent Users Section
                 const Expanded(
                   flex: 1,
                   child: _RecentUsersSection(),
                 ),
                 const SizedBox(width: 24),
-                
-                // Chart Section
                 Expanded(
                   flex: 2,
-                  child: _ChartSection(isDaily: isDaily, onToggle: onToggle),
+                  child: ChartSection(isDaily: isDaily, onToggle: onToggle), // Changed from _ChartSection
                 ),
               ],
             ),
-          ] else ...[
-            // Mobile Layout - Stacked
-            const _RecentUsersSection(),
-            const SizedBox(height: 24),
-            _ChartSection(isDaily: isDaily, onToggle: onToggle),
           ],
         ],
       ),
@@ -448,52 +585,109 @@ class _StatisticsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth >= 1024;
+    final isMobile = screenWidth < 768;
+    final isTablet = screenWidth >= 768 && screenWidth < 1024;
+
+    int crossAxisCount;
+    double childAspectRatio;
+    double spacing;
+
+    if (isMobile) {
+      crossAxisCount = 2;
+      childAspectRatio = 1.3;
+      spacing = 12;
+    } else if (isTablet) {
+      crossAxisCount = 2;
+      childAspectRatio = 2.0;
+      spacing = 16;
+    } else {
+      crossAxisCount = 4;
+      childAspectRatio = 2.5;
+      spacing = 20;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Overview',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: isMobile ? 18 : 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isMobile ? 12 : 16),
         GridView.count(
-          crossAxisCount: isDesktop ? 4 : 2,
+          crossAxisCount: crossAxisCount,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: isDesktop ? 20 : 16,
-          mainAxisSpacing: isDesktop ? 20 : 16,
-          childAspectRatio: isDesktop ? 2.5 : 1.5,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: childAspectRatio,
           children: [
-            _buildStatCard('Total Users', _getTotalUsers(), Icons.people, Colors.blue, isDesktop),
-            _buildStatCard('Activities', _getTotalActivities(), Icons.local_activity, Colors.green, isDesktop),
-            _buildStatCard('Transactions', _getTotalTransactions(), Icons.receipt, Colors.orange, isDesktop),
-            _buildStatCard('Active Today', _getActiveToday(), Icons.trending_up, Colors.purple, isDesktop),
+            _buildStatCard('Total Users', _getTotalUsers(), Icons.people, Colors.blue, isMobile, isTablet),
+            _buildStatCard('Activities', _getTotalActivities(), Icons.local_activity, Colors.green, isMobile, isTablet),
+            _buildStatCard('Transactions', _getTotalTransactions(), Icons.receipt, Colors.orange, isMobile, isTablet),
+            _buildStatCard('Active Today', _getActiveToday(), Icons.trending_up, Colors.purple, isMobile, isTablet),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, Widget value, IconData icon, Color color, bool isDesktop) {
+  Widget _buildStatCard(String title, Widget value, IconData icon, Color color, bool isMobile, bool isTablet) {
     return Card(
-      elevation: 4,
+      elevation: 2,
       child: Padding(
-        padding: EdgeInsets.all(isDesktop ? 20 : 16),
-        child: isDesktop ? 
-          // Desktop Layout - Horizontal
+        padding: EdgeInsets.all(isMobile ? 12 : (isTablet ? 16 : 20)),
+        child: isMobile ? 
+          // Mobile Layout - Compact vertical
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(icon, color: color, size: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              value,
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ) :
+          // Tablet and Desktop Layout - Horizontal
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(isTablet ? 10 : 12),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: isTablet ? 20 : 24),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: isTablet ? 12 : 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,44 +697,13 @@ class _StatisticsSection extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: isTablet ? 13 : 14,
                         color: Colors.grey,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
-          ) :
-          // Mobile Layout - Vertical
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(icon, color: color, size: 24),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon, color: color, size: 16),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              value,
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -554,11 +717,11 @@ class _StatisticsSection extends StatelessWidget {
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Text('--', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
+          return const Text('--', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
         }
         return Text(
           '${snapshot.data!.docs.length}',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         );
       },
     );
@@ -569,11 +732,11 @@ class _StatisticsSection extends StatelessWidget {
       stream: FirebaseFirestore.instance.collectionGroup('activities').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Text('--', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
+          return const Text('--', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
         }
         return Text(
           '${snapshot.data!.docs.length}',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         );
       },
     );
@@ -584,49 +747,49 @@ class _StatisticsSection extends StatelessWidget {
       stream: FirebaseFirestore.instance.collectionGroup('transactions').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Text('--', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
+          return const Text('--', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
         }
         return Text(
           '${snapshot.data!.docs.length}',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         );
       },
     );
   }
 
   Widget _getActiveToday() {
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
-    
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collectionGroup('activities')
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Text('--', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
-        }
-        
-        Set<String> activeUsers = {};
-        for (var doc in snapshot.data!.docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          if (data['members'] != null) {
-            for (var member in data['members']) {
-              if (member['id'] != null) {
-                activeUsers.add(member['id']);
-              }
+  final today = DateTime.now();
+  final startOfDay = DateTime(today.year, today.month, today.day);
+  
+  return StreamBuilder<QuerySnapshot>(
+    stream: FirebaseFirestore.instance
+        .collectionGroup('activities')
+        .where('createdAt', isGreaterThanOrEqualTo: startOfDay) // Use DateTime directly
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return const Text('--', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold));
+      }
+      
+      Set<String> activeUsers = {};
+      for (var doc in snapshot.data!.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['members'] != null) {
+          for (var member in data['members']) {
+            if (member['id'] != null) {
+              activeUsers.add(member['id']);
             }
           }
         }
-        
-        return Text(
-          '${activeUsers.length}',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        );
-      },
-    );
-  }
+      }
+      
+      return Text(
+        '${activeUsers.length}',
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      );
+    },
+  );
+}
 }
 
 class _RecentUsersSection extends StatelessWidget {
@@ -634,26 +797,32 @@ class _RecentUsersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Recent Users',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: isMobile ? 18 : 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: isMobile ? 12 : 16),
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
               .orderBy('createdAt', descending: true)
-              .limit(5)
+              .limit(isMobile ? 3 : 5)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Card(
+              return Card(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.all(isMobile ? 16 : 32),
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
               );
             }
@@ -671,14 +840,14 @@ class _RecentUsersSection extends StatelessWidget {
             }
 
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Card(
+              return Card(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: Center(
                     child: Text(
                       'No users found',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: isMobile ? 14 : 16,
                         color: Colors.grey,
                       ),
                     ),
@@ -688,67 +857,68 @@ class _RecentUsersSection extends StatelessWidget {
             }
 
             return Card(
-              child: Column(
-                children: snapshot.data!.docs.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final doc = entry.value;
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: snapshot.data!.docs.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final doc = snapshot.data!.docs[index];
                   final data = doc.data() as Map<String, dynamic>;
                   final fullName = data['full_name']?.toString() ?? 'Unknown User';
                   final email = data['email']?.toString() ?? 'No email';
                   final role = data['role']?.toString() ?? 'user';
                   
-                  return Column(
-                    children: [
-                      ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppTheme.primaryColor,
-                          child: Text(
-                            fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          fullName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Text(
-                          email,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: role == 'admin' 
-                              ? Colors.red.withOpacity(0.1)
-                              : Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            role.toUpperCase(),
-                            style: TextStyle(
-                              color: role == 'admin' ? Colors.red : Colors.green,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
+                  return ListTile(
+                    dense: isMobile,
+                    leading: CircleAvatar(
+                      radius: isMobile ? 18 : 20,
+                      backgroundColor: AppTheme.primaryColor,
+                      child: Text(
+                        fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isMobile ? 14 : 16,
                         ),
                       ),
-                      if (index < snapshot.data!.docs.length - 1)
-                        const Divider(height: 1),
-                    ],
+                    ),
+                    title: Text(
+                      fullName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: isMobile ? 14 : 16,
+                      ),
+                    ),
+                    subtitle: Text(
+                      email,
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: isMobile ? 12 : 13,
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 6 : 8,
+                        vertical: isMobile ? 2 : 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: role == 'admin' 
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        role.toUpperCase(),
+                        style: TextStyle(
+                          color: role == 'admin' ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.w600,
+                          fontSize: isMobile ? 10 : 11,
+                        ),
+                      ),
+                    ),
                   );
-                }).toList(),
+                },
               ),
             );
           },
@@ -758,156 +928,53 @@ class _RecentUsersSection extends StatelessWidget {
   }
 }
 
-class _ChartSection extends StatelessWidget {
+// Alternative implementation for tracking login activity
+class _LoginActivityChart extends StatelessWidget {
   final bool isDaily;
-  final VoidCallback onToggle;
-
-  const _ChartSection({required this.isDaily, required this.onToggle});
+  
+  const _LoginActivityChart({required this.isDaily});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'User Activity',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            Row(
-              children: [
-                Text(isDaily ? 'Daily' : 'Weekly'),
-                Switch(
-                  value: !isDaily,
-                  onChanged: (_) => onToggle(),
-                  activeColor: AppTheme.primaryColor,
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              height: 250,
-              child: LineChart(
-                LineChartData(
-                  gridData: FlGridData(show: true),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: true, reservedSize: 40),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        getTitlesWidget: (value, meta) {
-                          if (isDaily) {
-                            final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                            if (value >= 0 && value < days.length) {
-                              return Text(days[value.toInt()]);
-                            }
-                          } else {
-                            return Text('W${value.toInt() + 1}');
-                          }
-                          return const Text('');
-                        },
-                      ),
-                    ),
-                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  borderData: FlBorderData(show: true),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: _generateChartData(),
-                      isCurved: true,
-                      color: AppTheme.primaryColor,
-                      barWidth: 3,
-                      dotData: FlDotData(show: true),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                ),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('user_sessions') // You'd need to create this collection
+          .where('loginTime', isGreaterThanOrEqualTo: _getTimeRange())
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final loginData = _processLoginData(snapshot.data!.docs);
+        
+        return LineChart(
+          LineChartData(
+            lineBarsData: [
+              LineChartBarData(
+                spots: loginData,
+                isCurved: true,
+                color: AppTheme.primaryColor,
               ),
-            ),
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  List<FlSpot> _generateChartData() {
-    // Mock data - in a real app, you'd fetch this from Firebase
+  Timestamp _getTimeRange() {
+    final now = DateTime.now();
     if (isDaily) {
-      return [
-        const FlSpot(0, 12),
-        const FlSpot(1, 18),
-        const FlSpot(2, 15),
-        const FlSpot(3, 22),
-        const FlSpot(4, 28),
-        const FlSpot(5, 25),
-        const FlSpot(6, 20),
-      ];
+      return Timestamp.fromDate(now.subtract(const Duration(days: 7)));
     } else {
-      return [
-        const FlSpot(0, 85),
-        const FlSpot(1, 120),
-        const FlSpot(2, 95),
-        const FlSpot(3, 140),
-      ];
+      return Timestamp.fromDate(now.subtract(const Duration(days: 30)));
     }
   }
-}
 
-class _UsersPage extends StatelessWidget {
-  const _UsersPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Users Management\n(To be implemented)',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 18),
-      ),
-    );
-  }
-}
-
-class _ActivitiesPage extends StatelessWidget {
-  const _ActivitiesPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Activities Management\n(To be implemented)',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 18),
-      ),
-    );
-  }
-}
-
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Profile Settings\n(To be implemented)',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 18),
-      ),
-    );
+  List<FlSpot> _processLoginData(List<QueryDocumentSnapshot> docs) {
+    // Process login sessions and group by time period
+    // Return FlSpot list for chart
+    return [];
   }
 }

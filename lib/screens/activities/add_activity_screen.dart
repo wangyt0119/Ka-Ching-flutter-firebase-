@@ -101,60 +101,62 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   }
 
   // Create a new activity
-  Future<void> _createActivity() async {
-    if (_nameController.text.trim().isEmpty) {
+Future<void> _createActivity() async {
+  if (_nameController.text.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please enter an activity name')),
+    );
+    return;
+  }
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    try {
+      // Create a new document with auto-generated ID
+      final activityRef =
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('activities')
+              .doc();
+
+      // Prepare members data
+      final List<Map<String, dynamic>> members =
+          _selectedMembers
+              .where((member) => member['selected'] == true)
+              .map(
+                (member) => {
+                  'id': member['id'],
+                  'name': member['name'],
+                  'email': member['email'],
+                },
+              )
+              .toList();
+
+      // Create activity document
+      await activityRef.set({
+        'name': _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'members': members,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': user.uid, // Store user ID for chart compatibility
+        'createdByName': _userName, // Store full name for display purposes
+        'activity_id': activityRef.id,
+      });
+
+      // Navigate back and show success message
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an activity name')),
+        const SnackBar(content: Text('Activity created successfully')),
       );
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        // Create a new document with auto-generated ID
-        final activityRef =
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .collection('activities')
-                .doc();
-
-        // Prepare members data
-        final List<Map<String, dynamic>> members =
-            _selectedMembers
-                .where((member) => member['selected'] == true)
-                .map(
-                  (member) => {
-                    'id': member['id'],
-                    'name': member['name'],
-                    'email': member['email'],
-                  },
-                )
-                .toList();
-
-        // Create activity document
-        await activityRef.set({
-          'name': _nameController.text.trim(),
-          'description': _descriptionController.text.trim(),
-          'members': members,
-          'createdAt': FieldValue.serverTimestamp(),
-          'activity_id': activityRef.id,
-        });
-
-        // Navigate back and show success message
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity created successfully')),
-        );
-      } catch (e) {
-        print('Error creating activity: $e');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error creating activity: $e')));
-      }
+    } catch (e) {
+      print('Error creating activity: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating activity: $e')));
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
