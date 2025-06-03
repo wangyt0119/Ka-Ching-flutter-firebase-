@@ -35,7 +35,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String? selectedActivityName;
   List<Map<String, dynamic>> userActivities = [];
 
-  String selectedCurrency = 'USD'; // default
+  String selectedCurrency = 'MYR'; // default
   DateTime selectedDate = DateTime.now();
   File? _receiptImage;
   String? _base64Image;
