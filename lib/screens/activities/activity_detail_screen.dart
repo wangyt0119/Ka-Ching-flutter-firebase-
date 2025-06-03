@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../transactions/add_expense_screen.dart';
+import 'edit_activity_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
 
 class ActivityDetailsScreen extends StatefulWidget {
@@ -188,15 +189,23 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         backgroundColor: const Color(0xFFF5A9C1),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Edit activity would be implemented here'),
-                ),
-              );
-            },
-          ),
+  icon: Icon(Icons.edit),
+  onPressed: () async {
+    final updated = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditActivityScreen(activityData: _activity!),
+      ),
+    );
+
+    // Check if update happened, then reload
+    if (updated == true) {
+      _loadActivityData();
+    }
+  },
+),
+
+
         ],
       ),
       body:
