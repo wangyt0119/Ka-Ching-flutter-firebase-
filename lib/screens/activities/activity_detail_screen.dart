@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 import '../transactions/add_expense_screen.dart';
+import '../transactions/transaction_detail_screen.dart';
 
 class ActivityDetailsScreen extends StatefulWidget {
   final String activityId;
@@ -97,10 +98,13 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () {
-          // TODO: Implement transaction detail view
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Transaction details will be implemented here'),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TransactionDetailScreen(
+                transactionId: transaction['id'],
+                activityId: widget.activityId,
+              ),
             ),
           );
         },

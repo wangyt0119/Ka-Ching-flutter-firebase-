@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'add_expense_screen.dart';
 import '../../services/currency_service.dart';
 import '../settings/currency_screen.dart';
+import 'transaction_detail_screen.dart';
+import '../activities/activity_detail_screen.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -100,12 +103,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           // Transactions List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  _firestore
-                      .collection('transactions')
-                      .where('user_id', isEqualTo: _auth.currentUser?.uid)
-                      .orderBy('date', descending: true)
-                      .snapshots(),
+              stream: _firestore
+                  .collection('users')
+                  .doc(_auth.currentUser?.uid)
+                  .collection('activities')
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
@@ -115,90 +117,72 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final transactions = snapshot.data?.docs ?? [];
-                final filteredTransactions =
-                    transactions.where((doc) {
-                      if (_selectedFilter == 'All') return true;
-                      return doc['type'] == _selectedFilter;
-                    }).toList();
-
-                if (filteredTransactions.isEmpty) {
+                final activities = snapshot.data?.docs ?? [];
+                
+                if (activities.isEmpty) {
                   return const Center(
                     child: Text(
-                      'No transactions yet. Add some to get started!',
+                      'No activities yet. Create an activity to add transactions!',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   );
                 }
 
+                // Flatten all transactions from all activities
+                List<Map<String, dynamic>> allTransactions = [];
+                
+                for (var activity in activities) {
+                  final activityId = activity.id;
+                  final activityName = activity['name'] ?? 'Unnamed Activity';
+                  
+                  // We'll need to fetch transactions for each activity
+                  // This is a placeholder - we'll need to use another approach
+                  // to get all transactions across activities
+                }
+                
+                // For now, show activities instead of transactions
                 return ListView.builder(
-                  itemCount: filteredTransactions.length,
+                  itemCount: activities.length,
                   itemBuilder: (context, index) {
-                    final transaction = filteredTransactions[index];
-                    final amount = transaction['amount'] as double;
-                    final isExpense = transaction['type'] == 'Expense';
-                    final date = (transaction['date'] as Timestamp).toDate();
-                    final transactionCurrency =
-                        transaction['currency'] ?? 'USD';
-
-                    return FutureBuilder<double>(
-                      future: CurrencyService.convertCurrency(
-                        amount,
-                        transactionCurrency,
-                        _selectedCurrency,
+                    final activity = activities[index];
+                    final activityId = activity.id;
+                    final activityName = activity['name'] ?? 'Unnamed Activity';
+                    
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.purple.withOpacity(0.2),
+                          child: Icon(
+                            Icons.group,
+                            color: Colors.purple,
+                          ),
+                        ),
+                        title: Text(
+                          activityName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Tap to view transactions',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ActivityDetailsScreen(
+                                activityId: activityId,
+                              ),
+                            ),
                           );
-                        }
-
-                        final convertedAmount = snapshot.data ?? amount;
-                        final formattedAmount = CurrencyService.formatCurrency(
-                          convertedAmount,
-                          _selectedCurrency,
-                        );
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  isExpense
-                                      ? Colors.red.withOpacity(0.2)
-                                      : Colors.green.withOpacity(0.2),
-                              child: Icon(
-                                isExpense ? Icons.remove : Icons.add,
-                                color: isExpense ? Colors.red : Colors.green,
-                              ),
-                            ),
-                            title: Text(
-                              transaction['description'] ?? 'No description',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              DateFormat('MMM dd, yyyy').format(date),
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                            trailing: Text(
-                              '${isExpense ? '-' : '+'}$formattedAmount',
-                              style: TextStyle(
-                                color: isExpense ? Colors.red : Colors.green,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     );
                   },
                 );
@@ -210,23 +194,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFFF5A9C1),
         onPressed: () {
-          // TODO: Implement add transaction functionality
-          showDialog(
-            context: context,
-            builder:
-                (context) => AlertDialog(
-                  title: const Text('Add Transaction'),
-                  content: const Text(
-                    'Transaction form will be implemented here',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-          );
+          // Navigate directly to activities list to select one
+          Navigator.pushNamed(context, '/activities');
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
