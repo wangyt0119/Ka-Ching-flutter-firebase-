@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
+import '../home/user_home.dart';
+
 
 class EditActivityScreen extends StatefulWidget {
   final Map<String, dynamic> activityData;
@@ -37,6 +39,60 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
     _descriptionController.dispose();
     super.dispose();
   }
+
+  void _confirmDelete() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete Activity'),
+      content: const Text('Are you sure you want to delete this activity?'),
+      actions: [
+        TextButton(
+          child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(context),
+        ),
+        TextButton(
+          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          onPressed: () async {
+            Navigator.pop(context); // Close dialog
+            await _deleteActivity(); // Perform deletion
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+  Future<void> _deleteActivity() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    try {
+      final activityRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('activities')
+          .doc(widget.activityData['activity_id']);
+
+      await activityRef.delete();
+
+      // Navigate to UserHome directly (replace below with your actual UserHome route)
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const UserHomePage()),
+        (Route<dynamic> route) => false,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Activity deleted successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting activity: $e')),
+      );
+    }
+  }
+}
+
+
 
   Future<void> _getCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -147,6 +203,12 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
         title: const Text('Edit Activity'),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
+        actions: [
+    IconButton(
+      icon: const Icon(Icons.delete),
+      onPressed: _confirmDelete,
+    ),
+  ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
