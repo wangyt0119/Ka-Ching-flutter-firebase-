@@ -35,32 +35,47 @@ class _UserHomePageState extends State<UserHomePage> {
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final data = doc.data();
 
-      final activitySnapshot =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('activities')
-              .orderBy('createdAt', descending: true)
-              .get();
+      final activitySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('activities')
+          .orderBy('createdAt', descending: true)
+          .get();
 
-      final loadedActivities =
-          activitySnapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return data;
-          }).toList();
+      final loadedActivities = activitySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      // Calculate balances from activities
+      double totalOwing = 0.0;
+      double totalOwed = 0.0;
+
+      for (var activity in loadedActivities) {
+        if (activity['balances'] != null) {
+          final balances = Map<String, dynamic>.from(activity['balances']);
+          if (balances.containsKey('You')) {
+            final balance = balances['You'].toDouble();
+            if (balance < 0) {
+              totalOwing += balance.abs();
+            } else if (balance > 0) {
+              totalOwed += balance;
+            }
+          }
+        }
+      }
 
       setState(() {
         fullName = data?['full_name'] ?? 'User';
-        youOwe = data?['you_owe']?.toDouble() ?? 0.0;
-        youAreOwed = data?['you_are_owed']?.toDouble() ?? 0.0;
+        youOwe = totalOwing;
+        youAreOwed = totalOwed;
         totalBalance = youAreOwed - youOwe;
         activities = loadedActivities.cast<Map<String, dynamic>>();
 

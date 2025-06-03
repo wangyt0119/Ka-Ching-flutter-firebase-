@@ -47,6 +47,9 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
   List<String> allParticipants = [];
   bool _isLoading = false;
 
+  Map<String, double> customShares = {};
+  Map<String, TextEditingController> shareControllers = {};
+
   @override
   void initState() {
     super.initState();
@@ -78,7 +81,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
       selectedDate = DateTime.now();
     }
     
-    // Set split method
+    // Set split method - ensure we have all three options
     splitMethod = widget.transaction['split'] ?? 'equally';
     
     // Set paid by
@@ -87,54 +90,176 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
     // Set participants
     if (widget.transaction['participants'] != null) {
       final participants = List<String>.from(widget.transaction['participants']);
-      allParticipants = ['You', ...participants.where((p) => p != 'You')];
-      selectedParticipants = {
-        for (var name in allParticipants) 
-          name: participants.contains(name)
-      };
+      
+      // Load activity members to get the full list of possible participants
+      _loadActivityMembers().then((_) {
+        setState(() {
+          // Set selected participants based on transaction data
+          selectedParticipants = {
+            for (var name in allParticipants) 
+              name: participants.contains(name)
+          };
+        });
+      });
     } else {
-      allParticipants = ['You'];
+      _loadActivityMembers();
       selectedParticipants = {'You': true};
     }
     
-    // Set receipt image if available
-    _base64Image = widget.transaction['receipt_image'];
+    // Load custom shares if available
+    if (widget.transaction['shares'] != null) {
+      final shares = Map<String, dynamic>.from(widget.transaction['shares']);
+      
+      // Convert to double values
+      customShares = shares.map((key, value) => 
+        MapEntry(key, value is num ? value.toDouble() : 0.0));
+    }
     
-    // Load activity members
-    _loadActivityMembers();
+    // Initialize receipt image if available
+    if (widget.transaction['receipt_image'] != null) {
+      _base64Image = widget.transaction['receipt_image'];
+    }
+    
+    // Initialize share controllers
+    _initializeShareControllers();
+  }
+
+  void _initializeShareControllers() {
+    // Clear existing controllers
+    shareControllers.clear();
+    
+    // Create controllers for each participant
+    for (var participant in allParticipants) {
+      // For the current user (You), check if there's an existing share under their actual name
+      String shareKey = participant;
+      if (participant == 'You' && widget.transaction['shares'] != null) {
+        // Try to find the current user's share in the transaction data
+        final User? currentUser = _auth.currentUser;
+        if (currentUser != null) {
+          final shares = Map<String, dynamic>.from(widget.transaction['shares']);
+          
+          // Check if there's a share for "You" or for the user's display name
+          if (shares.containsKey('You')) {
+            shareKey = 'You';
+          } else if (currentUser.displayName != null && shares.containsKey(currentUser.displayName)) {
+            shareKey = currentUser.displayName!;
+          }
+        }
+      }
+      
+      // Initialize with existing share value if available
+      String initialValue = '';
+      if (widget.transaction['shares'] != null) {
+        final shares = Map<String, dynamic>.from(widget.transaction['shares']);
+        if (shares.containsKey(shareKey)) {
+          final shareValue = shares[shareKey];
+          initialValue = shareValue.toString();
+        }
+      }
+      
+      shareControllers[participant] = TextEditingController(text: initialValue);
+      
+      // Add listener to update customShares when text changes
+      shareControllers[participant]!.addListener(() {
+        final value = double.tryParse(shareControllers[participant]!.text) ?? 0.0;
+        setState(() {
+          customShares[participant] = value;
+        });
+      });
+      
+      // Initialize customShares with the initial value
+      if (initialValue.isNotEmpty) {
+        customShares[participant] = double.tryParse(initialValue) ?? 0.0;
+      }
+    }
   }
 
   Future<void> _loadActivityMembers() async {
     try {
-      final activityDoc = await _firestore
-          .collection('users')
-          .doc(_auth.currentUser?.uid)
-          .collection('activities')
-          .doc(widget.activityId)
-          .get();
-      
-      if (activityDoc.exists) {
-        final activityData = activityDoc.data();
-        if (activityData != null && activityData['members'] != null) {
-          final members = List<Map<String, dynamic>>.from(activityData['members']);
-          final memberNames = members.map((m) => m['name'] as String).toList();
-          
-          setState(() {
-            allParticipants = ['You', ...memberNames.where((name) => name != 'You')];
+      final User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        // First get the current user's display name or email
+        String currentUserName = 'You';
+        
+        // Get user document to check if this is the current user's profile
+        final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+        final userData = userDoc.data();
+        final currentUserEmail = userData?['email'] ?? currentUser.email ?? '';
+        final currentUserDisplayName = userData?['displayName'] ?? currentUser.displayName ?? '';
+        
+        // Get activity members
+        final activityDoc = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('activities')
+            .doc(selectedActivityId)
+            .get();
+        
+        if (activityDoc.exists) {
+          final activityData = activityDoc.data();
+          if (activityData != null && activityData['members'] != null) {
+            final members = List<Map<String, dynamic>>.from(activityData['members']);
             
-            // Preserve selected participants
-            final selectedNames = selectedParticipants.keys.toList();
-            selectedParticipants = {
-              for (var name in allParticipants) 
-                name: selectedNames.contains(name) ? selectedParticipants[name]! : false
-            };
-          });
+            // Extract member names, ensuring current user is represented as "You"
+            final List<String> memberNames = [];
+            
+            // Add current user as "You"
+            memberNames.add('You');
+            
+            // Add other members, excluding the current user
+            for (var member in members) {
+              final name = member['name'] as String;
+              final email = member['email'] as String? ?? '';
+              
+              // Skip if this is the current user (already added as "You")
+              if ((name == currentUserDisplayName || email == currentUserEmail) && 
+                  name != 'You') {
+                continue;
+              }
+              
+              // Add other members
+              if (name != 'You') {
+                memberNames.add(name);
+              }
+            }
+            
+            setState(() {
+              allParticipants = memberNames;
+              
+              // Update selected participants
+              if (widget.transaction['participants'] != null) {
+                final participants = List<String>.from(widget.transaction['participants']);
+                
+                // Map old participant names to new ones if needed
+                selectedParticipants = {};
+                for (var name in allParticipants) {
+                  if (name == 'You') {
+                    // Check if current user was in participants
+                    selectedParticipants[name] = participants.contains(currentUserDisplayName) || 
+                                                participants.contains('You');
+                  } else {
+                    selectedParticipants[name] = participants.contains(name);
+                  }
+                }
+              }
+              
+              // Update paidBy if needed
+              if (paidBy == currentUserDisplayName) {
+                paidBy = 'You';
+              }
+              
+              // Re-initialize share controllers
+              _initializeShareControllers();
+            });
+          }
         }
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading activity members: $e')),
-      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading activity members: $error')),
+        );
+      }
     }
   }
 
@@ -212,14 +337,63 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
   }
 
   Future<void> _updateExpense() async {
-    if (!_formKey.currentState!.validate() || selectedActivityId == null)
-      return;
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
     });
 
     try {
+      // Get active participants
+      final activeParticipants = selectedParticipants.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
+          
+      if (activeParticipants.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select at least one participant')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Validate split amounts match total for unequal and percentage splits
+      if (splitMethod == 'unequally') {
+        final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
+        final totalShares = activeParticipants.fold(
+          0.0, 
+          (sum, name) => sum + (customShares[name] ?? 0.0)
+        );
+        
+        if ((totalAmount - totalShares).abs() > 0.01) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      } else if (splitMethod == 'percentage') {
+        final totalPercentage = activeParticipants.fold(
+          0.0, 
+          (sum, name) => sum + (customShares[name] ?? 0.0)
+        );
+        
+        if ((totalPercentage - 100.0).abs() > 0.1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
       final user = _auth.currentUser!;
       final expense = {
         'title': _titleController.text.trim(),
@@ -229,12 +403,21 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
         'description': _descriptionController.text.trim(),
         'paid_by': paidBy,
         'split': splitMethod,
-        'participants': selectedParticipants.entries
-            .where((entry) => entry.value)
-            .map((entry) => entry.key)
-            .toList(),
+        'participants': activeParticipants,
         if (_base64Image != null) 'receipt_image': _base64Image,
       };
+
+      // Handle different split methods
+      if (splitMethod == 'unequally' || splitMethod == 'percentage') {
+        // Create shares map for unequal or percentage split
+        final shares = <String, double>{};
+        
+        for (var participant in activeParticipants) {
+          shares[participant] = customShares[participant] ?? 0.0;
+        }
+        
+        expense['shares'] = shares;
+      }
 
       await _firestore
           .collection('users')
@@ -251,10 +434,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
         );
         Navigator.pop(context, true); // Return true to indicate success
       }
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating transaction: $e')),
+          SnackBar(content: Text('Error updating transaction: $error')),
         );
       }
     } finally {
@@ -307,157 +490,62 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
+                    
+                    // Title field
                     TextFormField(
                       controller: _titleController,
                       decoration: InputDecoration(
-                        labelText: "Title",
+                        labelText: 'Title',
                         prefixIcon: const Icon(Icons.title, color: Color(0xFFB19CD9)),
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFB19CD9),
-                            width: 2,
-                          ),
                         ),
                       ),
-                      validator: (val) => val!.isEmpty ? "Enter a title" : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Amount",
-                        prefixIcon: const Icon(
-                          Icons.attach_money,
-                          color: Color(0xFFB19CD9),
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFB19CD9),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      validator: (val) => val!.isEmpty ? "Enter an amount" : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      readOnly: true,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() => selectedDate = picked);
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a title';
                         }
+                        return null;
                       },
-                      decoration: InputDecoration(
-                        labelText: "Date",
-                        prefixIcon: const Icon(
-                          Icons.calendar_today,
-                          color: Color(0xFFB19CD9),
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFB19CD9),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      controller: TextEditingController(
-                        text: DateFormat.yMMMd().format(selectedDate),
-                      ),
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _descriptionController,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        labelText: "Description (Optional)",
-                        prefixIcon: const Icon(
-                          Icons.description,
-                          color: Color(0xFFB19CD9),
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB19CD9)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFB19CD9),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    
+                    // Amount and currency
                     Row(
                       children: [
                         Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: _amountController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Amount',
+                              prefixIcon: const Icon(Icons.attach_money, color: Color(0xFFB19CD9)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter an amount';
+                              }
+                              if (double.tryParse(value) == null) {
+                                return 'Please enter a valid number';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
                           child: InkWell(
                             onTap: _showCurrencyDialog,
                             child: InputDecorator(
                               decoration: InputDecoration(
-                                labelText: "Currency",
-                                prefixIcon: const Icon(
-                                  Icons.currency_exchange,
-                                  color: Color(0xFFB19CD9),
-                                ),
-                                filled: true,
-                                fillColor: Theme.of(context).cardColor,
+                                labelText: 'Currency',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                      const BorderSide(color: Color(0xFFB19CD9)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide:
-                                      const BorderSide(color: Color(0xFFB19CD9)),
                                 ),
                               ),
                               child: Row(
@@ -473,6 +561,56 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    
+                    // Date picker
+                    InkWell(
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (pickedDate != null) {
+                          setState(() {
+                            selectedDate = pickedDate;
+                          });
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Date',
+                          prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFFB19CD9)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(DateFormat.yMMMd().format(selectedDate)),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Description
+                    TextFormField(
+                      controller: _descriptionController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Description (Optional)',
+                        prefixIcon: const Icon(Icons.description, color: Color(0xFFB19CD9)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Receipt image
                     Row(
                       children: [
                         Expanded(
@@ -512,8 +650,21 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                         ),
                       ],
                     ),
-
+                    if (_base64Image != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            base64Decode(_base64Image!),
+                            height: 200,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 24),
+                    
+                    // Paid by section
                     const Text(
                       "Paid By",
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -534,6 +685,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                               .toList(),
                     ),
                     const SizedBox(height: 16),
+                    
+                    // Split method section
                     const Text(
                       "Split",
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -546,14 +699,24 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           selectedColor: Color(0xFFF5A9C1),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color:
-                                splitMethod == 'equally'
-                                    ? Colors.white
-                                    : Color(0xFFB19CD9),
+                            color: splitMethod == 'equally' ? Colors.white : Color(0xFFB19CD9),
                             fontWeight: FontWeight.bold,
                           ),
                           side: const BorderSide(color: Color(0xFFB19CD9)),
                           onSelected: (_) => setState(() => splitMethod = 'equally'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: const Text("Unequally"),
+                          selected: splitMethod == 'unequally',
+                          selectedColor: Color(0xFFF5A9C1),
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: splitMethod == 'unequally' ? Colors.white : Color(0xFFB19CD9),
+                            fontWeight: FontWeight.bold,
+                          ),
+                          side: const BorderSide(color: Color(0xFFB19CD9)),
+                          onSelected: (_) => setState(() => splitMethod = 'unequally'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
@@ -562,19 +725,21 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           selectedColor: Color(0xFFF5A9C1),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color:
-                                splitMethod == 'percentage'
-                                    ? Colors.white
-                                    : Color(0xFFB19CD9),
+                            color: splitMethod == 'percentage' ? Colors.white : Color(0xFFB19CD9),
                             fontWeight: FontWeight.bold,
                           ),
                           side: const BorderSide(color: Color(0xFFB19CD9)),
-                          onSelected:
-                              (_) => setState(() => splitMethod = 'percentage'),
+                          onSelected: (_) => setState(() => splitMethod = 'percentage'),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    
+                    // Split method UI
+                    _buildSplitMethodUI(),
                     const SizedBox(height: 24),
+                    
+                    // Participants section
                     const Text(
                       "Participants",
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -590,6 +755,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    
+                    // Update button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -615,5 +782,208 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
               ),
             ),
     );
+  }
+
+  // Split method UI builder
+  Widget _buildSplitMethodUI() {
+    final activeParticipants = selectedParticipants.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+        
+    if (activeParticipants.isEmpty) {
+      return const Text('Please select participants first');
+    }
+    
+    if (splitMethod == 'equally') {
+      // For equally split, just show the participants
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Each person pays:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            final amount = _amountController.text.isEmpty 
+                ? 0.0 
+                : (double.parse(_amountController.text) / activeParticipants.length);
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(name),
+                  Text('$selectedCurrency ${amount.toStringAsFixed(2)}'),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      );
+    } else if (splitMethod == 'unequally') {
+      // For unequal split, show text fields for each participant
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Enter amount for each person:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            // Make sure controller exists
+            if (!shareControllers.containsKey(name)) {
+              shareControllers[name] = TextEditingController();
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(name),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: shareControllers[name],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        prefixText: selectedCurrency + ' ',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        final amount = double.tryParse(value) ?? 0.0;
+                        setState(() {
+                          customShares[name] = amount;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total amount:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '$selectedCurrency ${customShares.values.fold(0.0, (sum, amount) => sum + amount).toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: (_amountController.text.isEmpty ? 0.0 : double.parse(_amountController.text) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).abs() < 0.01
+                      ? Colors.green
+                      : Colors.red,
+                ),
+              ),
+            ],
+          ),
+          if (_amountController.text.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Difference:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  '$selectedCurrency ${((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: ((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).abs() < 0.01
+                        ? Colors.green
+                        : Colors.red,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    } else if (splitMethod == 'percentage') {
+      // For percentage split, show percentage fields for each participant
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Enter percentage for each person:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(name),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: shareControllers[name],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        suffixText: '%',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        final percentage = double.tryParse(value) ?? 0.0;
+                        setState(() {
+                          customShares[name] = percentage;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total percentage:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '${customShares.entries.where((e) => activeParticipants.contains(e.key)).fold(0.0, (sum, e) => sum + e.value).toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: (customShares.entries.where((e) => activeParticipants.contains(e.key)).fold(0.0, (sum, e) => sum + e.value) - 100.0).abs() < 0.1
+                      ? Colors.green
+                      : Colors.red,
+                ),
+              ),
+            ],
+          ),
+          if (_amountController.text.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                const Text('Amount breakdown:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                ...activeParticipants.map((name) {
+                  final percentage = customShares[name] ?? 0.0;
+                  final amount = _amountController.text.isEmpty
+                      ? 0.0
+                      : (double.parse(_amountController.text) * percentage / 100);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(name),
+                        Text('$selectedCurrency ${amount.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+        ],
+      );
+    }
+    
+    return const SizedBox();
   }
 }
