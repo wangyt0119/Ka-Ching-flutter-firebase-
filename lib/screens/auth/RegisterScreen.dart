@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,9 +27,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String uid = userCred.user!.uid;
 
       // Save the role ('admin' or 'user') in Firebase Realtime Database
-      await FirebaseDatabase.instance.ref("users/$uid").set({
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'email': emailController.text,
-        'role': selectedRole,  // Save the selected role
+        'role': selectedRole,
+        'currency': 'MYR',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       // Navigate to home page after successful registration

@@ -22,7 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String fullName = '';
   String email = '';
-  String selectedCurrency = 'USD';
+  String selectedCurrency = 'MYR';
   bool isLoading = true;
   final TextEditingController _nameController = TextEditingController();
 
@@ -50,7 +50,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             fullName = userDoc.get('full_name') ?? 'User';
             email = currentUser.email ?? 'No email';
-            selectedCurrency = userDoc.get('currency') ?? 'USD';
+            selectedCurrency = userDoc.data().toString().contains('currency')
+            ? userDoc.get('currency')
+            : 'MYR';
+
             isLoading = false;
           });
         } else {
@@ -58,13 +61,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _firestore.collection('users').doc(currentUser.uid).set({
             'full_name': currentUser.displayName ?? 'User',
             'email': currentUser.email,
-            'currency': 'USD',
+            'currency': 'MYR',
             'created_at': FieldValue.serverTimestamp(),
           });
           setState(() {
             fullName = currentUser.displayName ?? 'User';
             email = currentUser.email ?? 'No email';
-            selectedCurrency = 'USD';
+            selectedCurrency = 'MYR';
             isLoading = false;
           });
         }

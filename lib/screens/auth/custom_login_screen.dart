@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import 'custom_register_screen.dart';
 import 'custom_forgot_password_screen.dart';
-import '../home/admin_home.dart';
+import '../admin/dashboard/admin_dashboard.dart';
 import '../home/user_home.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -150,7 +150,7 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                 .get();
         final role = doc.data()?['role'] ?? 'user';
         if (!doc.exists) {
-          // If user doc doesn't exist, create it
+          // If user doc doesn't exist, create it with default fields
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -158,6 +158,8 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                 'full_name': user.displayName ?? '',
                 'email': user.email,
                 'role': 'user',
+                'currency': 'MYR',
+                'createdAt': FieldValue.serverTimestamp(),
               });
         }
         if (role == 'admin') {
