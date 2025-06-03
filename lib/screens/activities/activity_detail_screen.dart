@@ -6,8 +6,13 @@ import '../../theme/app_theme.dart';
 import '../transactions/add_expense_screen.dart';
 import 'edit_activity_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
+import 'dart:io';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 
-// Helper class for settlement options - move to top level outside the class
+// Helper class for settlement options
 class SettlementOption {
   final String name;
   final double balance;
@@ -413,7 +418,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   subtitle: Text(option.displayText),
                   onTap: () {
                     Navigator.pop(context);
-                    _createSettlementTransaction(option.name, option.balance);
+                    _showSettlementAmountDialog(option);
                   },
                 );
               }).toList(),
@@ -512,6 +517,399 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     }
   }
 
+  // Add this method to generate and export a PDF report
+  Future<void> _generateActivityReport() async {
+    try {
+      if (_activity == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No activity data to export')),
+        );
+        return;
+      }
+
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Generating report...')),
+      );
+
+      // Create a PDF document
+      final pdf = pw.Document();
+      
+      // Add activity info page
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Header
+                pw.Center(
+                  child: pw.Text(
+                    'Activity Report',
+                    style: pw.TextStyle(
+                      fontSize: 24, 
+                      fontWeight: pw.FontWeight.bold
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                
+                // Activity details
+                pw.Text(
+                  'Activity: ${_activity!['name']}',
+                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  'Date: ${DateFormat('MMMM d, yyyy').format((_activity!['createdAt'] as Timestamp).toDate())}',
+                ),
+                if (_activity!['description'] != null && _activity!['description'] != '') ...[
+                  pw.SizedBox(height: 5),
+                  pw.Text('Description: ${_activity!['description']}'),
+                ],
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  'Total Amount: ${_activity!['currency'] ?? '\$'}${(_activity!['totalAmount'] ?? 0.0).toStringAsFixed(2)}',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Divider(),
+                
+                // Balances section
+                pw.Text(
+                  'Balances',
+                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 10),
+              ],
+            );
+          },
+        ),
+      );
+      
+      // Add balances page
+      if (_activity!['balances'] != null) {
+        final balances = Map<String, double>.from(_activity!['balances']);
+        final currentUserBalance = balances['You'] ?? 0.0;
+        
+        // People who owe you
+        final peopleWhoOweYou = balances.entries
+            .where((entry) => entry.key != 'You' && entry.value < 0)
+            .toList();
+        
+        // People you owe
+        final peopleYouOwe = balances.entries
+            .where((entry) => entry.key != 'You' && entry.value > 0)
+            .toList();
+        
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Balances',
+                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 20),
+                  
+                  // Your balance
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Your balance:'),
+                      pw.Text(
+                        '${currentUserBalance >= 0 ? '+' : ''}${currentUserBalance.toStringAsFixed(2)}',
+                      ),
+                    ],
+                  ),
+                  pw.SizedBox(height: 20),
+                  
+                  // People who owe you
+                  if (peopleWhoOweYou.isNotEmpty) ...[
+                    pw.Text('People who owe you:'),
+                    pw.SizedBox(height: 10),
+                    ...peopleWhoOweYou.map((entry) {
+                      final name = entry.key;
+                      final amount = entry.value.abs();
+                      
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 5),
+                        child: pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(name),
+                            pw.Text(
+                              '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    pw.SizedBox(height: 20),
+                  ],
+                  
+                  // People you owe
+                  if (peopleYouOwe.isNotEmpty) ...[
+                    pw.Text('You owe:'),
+                    pw.SizedBox(height: 10),
+                    ...peopleYouOwe.map((entry) {
+                      final name = entry.key;
+                      final amount = entry.value;
+                      
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 5),
+                        child: pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(name),
+                            pw.Text(
+                              '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ],
+              );
+            },
+          ),
+        );
+      }
+      
+      // Add transactions page
+      if (_transactions.isNotEmpty) {
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Center(
+                    child: pw.Text(
+                      'Transactions',
+                      style: pw.TextStyle(
+                        fontSize: 20, 
+                        fontWeight: pw.FontWeight.bold
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 20),
+                  
+                  // Transactions table
+                  pw.Table(
+                    border: pw.TableBorder.all(),
+                    columnWidths: {
+                      0: const pw.FlexColumnWidth(3), // Title
+                      1: const pw.FlexColumnWidth(2), // Paid by
+                      2: const pw.FlexColumnWidth(2), // Amount
+                      3: const pw.FlexColumnWidth(2), // Date
+                    },
+                    children: [
+                      // Table header
+                      pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColors.grey300,
+                        ),
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text(
+                              'Title',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text(
+                              'Paid by',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text(
+                              'Amount',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            ),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.all(5),
+                            child: pw.Text(
+                              'Date',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      // Transaction rows (limit to first 20 to avoid overflow)
+                      ...(_transactions.length > 20 ? _transactions.sublist(0, 20) : _transactions).map((transaction) {
+                        return pw.TableRow(
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(5),
+                              child: pw.Text(transaction['title'] ?? 'Untitled'),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(5),
+                              child: pw.Text(transaction['paid_by'] ?? ''),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(5),
+                              child: pw.Text(
+                                '${_activity!['currency'] ?? '\$'}${(transaction['amount']?.toDouble() ?? 0.0).toStringAsFixed(2)}',
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(5),
+                              child: pw.Text(transaction['date'] ?? ''),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      }
+      
+      // Generate PDF bytes
+      final pdfBytes = await pdf.save();
+      
+      // Share the PDF directly without saving to a file
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            pdfBytes,
+            name: '${_activity!['name'].toString().replaceAll(' ', '_')}_report.pdf',
+            mimeType: 'application/pdf',
+          ),
+        ],
+        text: 'Activity Report',
+      );
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report generated and ready to share')),
+      );
+      
+    } catch (e) {
+      print('Error generating PDF: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating report: $e')),
+      );
+    }
+  }
+
+  // Show dialog with export options
+  void _showExportOptionsDialog(File file) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Generated'),
+        content: const Text('Your activity report has been generated. What would you like to do with it?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('View'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Share.shareFiles([file.path], text: 'Activity Report');
+            },
+            child: const Text('Share'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Show dialog to enter settlement amount
+  void _showSettlementAmountDialog(SettlementOption option) {
+    final TextEditingController amountController = TextEditingController(
+      text: option.balance.abs().toStringAsFixed(2)
+    );
+    final isPositive = option.balance >= 0;
+    final maxAmount = option.balance.abs();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Settlement Amount'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPositive 
+                  ? 'You owe ${option.name} ${_activity!['currency'] ?? '\$'}${maxAmount.toStringAsFixed(2)}'
+                  : '${option.name} owes you ${_activity!['currency'] ?? '\$'}${maxAmount.toStringAsFixed(2)}'
+            ),
+            const SizedBox(height: 16),
+            const Text('How much would you like to settle?'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                prefixText: _activity!['currency'] ?? '\$',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enter an amount between 0 and ${maxAmount.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text) ?? 0.0;
+              if (amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a positive amount')),
+                );
+                return;
+              }
+              if (amount > maxAmount) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Amount cannot exceed ${maxAmount.toStringAsFixed(2)}')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _createSettlementTransaction(option.name, isPositive ? amount : -amount);
+            },
+            child: const Text('Settle'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -599,20 +997,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                               ),
                                             ),
                                             IconButton(
-                                              icon: const Icon(
-                                                Icons.file_download,
-                                              ),
-                                              onPressed: () {
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Export functionality would be implemented here',
-                                                    ),
-                                                  ),
-                                                );
-                                              },
+                                              icon: const Icon(Icons.file_download),
+                                              onPressed: _generateActivityReport,
                                             ),
                                           ],
                                         ),
