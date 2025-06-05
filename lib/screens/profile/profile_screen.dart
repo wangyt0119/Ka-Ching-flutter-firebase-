@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../auth_gate.dart';
+import 'package:provider/provider.dart';
+import '../../providers/currency_provider.dart';
 
 import 'edit_profile_screen.dart';
 import '../settings/settings_screen.dart';
@@ -22,7 +24,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String fullName = '';
   String email = '';
-  String selectedCurrency = 'MYR';
   bool isLoading = true;
   final TextEditingController _nameController = TextEditingController();
 
@@ -50,10 +51,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             fullName = userDoc.get('full_name') ?? 'User';
             email = currentUser.email ?? 'No email';
-            selectedCurrency = userDoc.data().toString().contains('currency')
-            ? userDoc.get('currency')
-            : 'MYR';
-
             isLoading = false;
           });
         } else {
@@ -67,7 +64,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             fullName = currentUser.displayName ?? 'User';
             email = currentUser.email ?? 'No email';
-            selectedCurrency = 'MYR';
             isLoading = false;
           });
         }
@@ -112,24 +108,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await _firestore.collection('users').doc(currentUser.uid).update({
           'currency': newCurrency,
         });
-
         final currencyService = CurrencyService();
-        final currency =
-            currencyService.getCurrencyByCode(newCurrency) ??
-            currencyService.getDefaultCurrency();
-        await currencyService.setSelectedCurrency(currency);
-
-        setState(() {
-          selectedCurrency = newCurrency;
-        });
+        final currency = currencyService.getCurrencyByCode(newCurrency) ?? currencyService.getDefaultCurrency();
+        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+        await currencyProvider.setSelectedCurrency(currency);
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Currency updated successfully')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error updating currency: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating currency: $e')));
     }
   }
 
@@ -165,36 +154,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showCurrencyDialog() {
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Select Currency'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: CurrencyService.supportedCurrencies.length,
-                itemBuilder: (context, index) {
-                  final currency = CurrencyService.supportedCurrencies.keys
-                      .elementAt(index);
-                  final currencyInfo =
-                      CurrencyService.supportedCurrencies[currency];
-                  return ListTile(
-                    title: Text(currencyInfo ?? currency),
-                    trailing:
-                        currency == selectedCurrency
-                            ? const Icon(Icons.check, color: Color(0xFFF5A9C1))
-                            : null,
-                    onTap: () {
-                      _updateCurrency(currency);
-                      Navigator.pop(context);
-                    },
-                  );
+      builder: (context) => AlertDialog(
+        title: const Text('Select Currency'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: CurrencyService.supportedCurrencies.length,
+            itemBuilder: (context, index) {
+              final currency = CurrencyService.supportedCurrencies.keys.elementAt(index);
+              final currencyInfo = CurrencyService.supportedCurrencies[currency];
+              return ListTile(
+                title: Text(currencyInfo ?? currency),
+                trailing: currency == currencyProvider.selectedCurrency.code
+                    ? const Icon(Icons.check, color: Color(0xFFF5A9C1))
+                    : null,
+                onTap: () {
+                  _updateCurrency(currency);
+                  Navigator.pop(context);
                 },
-              ),
-            ),
+              );
+            },
           ),
+        ),
+      ),
     );
   }
 
@@ -214,6 +200,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    final selectedCurrency = currencyProvider.selectedCurrency.code;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Color(0xFFF5A9C1),
@@ -387,6 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildCurrencyOption() {
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: GestureDetector(
@@ -412,7 +401,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(width: 16),
                 Text(
-                  'Currently: $selectedCurrency',
+                  'Currently: ${currencyProvider.selectedCurrency.code}',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.secondary,
                     fontSize: 16,

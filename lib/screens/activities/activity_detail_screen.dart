@@ -11,6 +11,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:provider/provider.dart';
+import '../../providers/currency_provider.dart';
 
 // Helper class for settlement options
 class SettlementOption {
@@ -27,8 +29,13 @@ class SettlementOption {
 
 class ActivityDetailsScreen extends StatefulWidget {
   final String activityId;
+  final String? ownerId;
 
-  const ActivityDetailsScreen({super.key, required this.activityId});
+  const ActivityDetailsScreen({
+    super.key, 
+    required this.activityId, 
+    this.ownerId,
+  });
 
   @override
   State<ActivityDetailsScreen> createState() => _ActivityDetailsScreenState();
@@ -40,11 +47,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _activity;
   List<Map<String, dynamic>> _transactions = [];
+  bool _isCreator = true;
 
   @override
   void initState() {
     super.initState();
-    _loadActivityData();
+    _loadActivityData().then((_) {
+      _recalculateActivityTotals();
+    });
   }
 
   Future<void> _loadActivityData() async {
@@ -55,96 +65,46 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        // Load activity details
-        final activityDoc =
-            await _firestore
-                .collection('users')
-                .doc(user.uid)
-                .collection('activities')
-                .doc(widget.activityId)
-                .get();
-
-        if (activityDoc.exists) {
-          final activityData = activityDoc.data()!;
-          activityData['id'] = activityDoc.id;
-
-          // Load transactions for this activity
-          final transactionsSnapshot =
-              await _firestore
-                  .collection('users')
-                  .doc(user.uid)
-                  .collection('activities')
-                  .doc(widget.activityId)
-                  .collection('transactions')
-                  .orderBy('date', descending: true)
-                  .get();
-
-          final transactions =
-              transactionsSnapshot.docs.map((doc) {
-                final data = doc.data();
-                data['id'] = doc.id;
-                return data;
-              }).toList();
-
-          // Calculate total amount and balances
-          double totalAmount = 0;
-          Map<String, double> balances = {};
-
-          for (var transaction in transactions) {
-            final amount = transaction['amount']?.toDouble() ?? 0.0;
-            final paidBy = transaction['paid_by'] ?? 'Unknown';
-            final participants = List<String>.from(transaction['participants'] ?? []);
-            
-            print('Processing transaction: ${transaction['title']} with amount: $amount');
-            print('Paid by: $paidBy, Participants: $participants');
-            
-            totalAmount += amount;
-
-            // Add to payer's balance (they paid)
-            balances[paidBy] = (balances[paidBy] ?? 0) + amount;
-
-            // Subtract from participants' balances (they owe)
-            final splitMethod = transaction['split'] ?? 'equally';
-            
-            if (splitMethod == 'equally' && participants.isNotEmpty) {
-              final shareAmount = amount / participants.length;
-              
-              for (var participant in participants) {
-                if (participant != paidBy) {
-                  balances[participant] = (balances[participant] ?? 0) - shareAmount;
-                }
-              }
-            } else if (splitMethod == 'percentage' && transaction['shares'] != null) {
-              final shares = Map<String, dynamic>.from(transaction['shares']);
-              
-              for (var entry in shares.entries) {
-                final participant = entry.key;
-                final percentage = entry.value;
-                
-                if (participant != paidBy) {
-                  final shareAmount = amount * percentage / 100;
-                  balances[participant] = (balances[participant] ?? 0) - shareAmount;
-                }
-              }
-            }
-          }
-
-          // After updating balances, log them
-          print('Updated balances: $balances');
-
-          // Update activity with total amount
-          await _firestore
+        // Determine if user is creator or participant
+        _isCreator = widget.ownerId == null;
+        
+        // Reference to the activity document
+        DocumentReference activityRef;
+        
+        if (_isCreator) {
+          // User is the creator
+          activityRef = _firestore
               .collection('users')
               .doc(user.uid)
               .collection('activities')
-              .doc(widget.activityId)
-              .update({
-            'totalAmount': totalAmount,
-            'balances': balances,
-          });
+              .doc(widget.activityId);
+        } else {
+          // User is a participant
+          activityRef = _firestore
+              .collection('users')
+              .doc(widget.ownerId)
+              .collection('activities')
+              .doc(widget.activityId);
+        }
 
-          activityData['totalAmount'] = totalAmount;
-          activityData['balances'] = balances;
+        // Load activity details
+        final activityDoc = await activityRef.get();
+
+        if (activityDoc.exists) {
+          final activityData = activityDoc.data() as Map<String, dynamic>;
+          activityData['id'] = activityDoc.id;
+
+          // Load transactions for this activity
+          final transactionsSnapshot = await activityRef
+              .collection('transactions')
+              .orderBy('date', descending: true)
+              .get();
+
+          final transactions = transactionsSnapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
 
           setState(() {
             _activity = activityData;
@@ -158,12 +118,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         }
       }
     } catch (e) {
+      print('Error loading activity data: $e');
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading activity: ${e.toString()}')),
-      );
     }
   }
 
@@ -171,6 +129,15 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final isCurrentUserPayer = transaction['paid_by'] == 'You';
     final amount = transaction['amount']?.toDouble() ?? 0.0;
     final date = transaction['date'] ?? '';
+
+    final originalCurrency = transaction['currency'] ?? 'USD';
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+      (c) => c.code == originalCurrency,
+      orElse: () => currencyProvider.selectedCurrency,
+    );
+    final converted = currencyProvider.convertToSelectedCurrency(amount, fromCurrency);
+    final displayAmount = currencyProvider.formatAmount(converted);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -183,6 +150,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               builder: (context) => TransactionDetailScreen(
                 transactionId: transaction['id'],
                 activityId: widget.activityId,
+                ownerId: widget.ownerId,
               ),
             ),
           );
@@ -234,7 +202,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '\$${amount.toStringAsFixed(2)}',
+                        displayAmount,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -260,23 +228,84 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
   // Add a method to show who owes you money
   Widget _buildBalancesCard() {
-    if (_activity == null || _activity!['balances'] == null) {
+    if (_activity == null) {
       return const SizedBox();
     }
-
-    final balances = Map<String, double>.from(_activity!['balances']);
-    final currentUserBalance = balances['You'] ?? 0.0;
-    
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid;
+    final userEmail = user?.email;
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    final selectedCurrency = currencyProvider.selectedCurrency;
+    // Recalculate balances in memory using original transaction data
+    Map<String, double> balances = {};
+    if (_activity != null && _activity!['members'] != null) {
+      for (var member in _activity!['members']) {
+        final id = member is Map ? (member['id'] ?? member['email'] ?? member['name']) : member;
+        balances[id] = 0.0;
+      }
+    }
+    for (var transaction in _transactions) {
+      final paidBy = transaction['paid_by'] ?? '';
+      final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+      final originalCurrency = transaction['currency'] ?? 'USD';
+      final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+        (c) => c.code == originalCurrency,
+        orElse: () => selectedCurrency,
+      );
+      final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+      final split = transaction['split'] ?? 'equally';
+      final participants = List<String>.from(transaction['participants'] ?? []);
+      if (transaction['is_settlement'] == true) {
+        continue;
+      }
+      if (split == 'equally' && participants.isNotEmpty) {
+        final sharePerPerson = amount / participants.length;
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
+        }
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+      } else if (split == 'unequally' && transaction['shares'] != null) {
+        final shares = Map<String, dynamic>.from(transaction['shares']);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          final shareOriginal = shares[participant]?.toDouble() ?? 0.0;
+          final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+          balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+        }
+        final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
+        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+      } else if (split == 'percentage' && transaction['shares'] != null) {
+        final shares = Map<String, dynamic>.from(transaction['shares']);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          final percentage = shares[participant]?.toDouble() ?? 0.0;
+          final shareOriginal = originalAmount * percentage / 100;
+          final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+          balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+        }
+        final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
+        final payerShareOriginal = originalAmount * payerPercentage / 100;
+        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+      }
+    }
+    String userKey = '';
+    if (balances.containsKey(userId)) {
+      userKey = userId!;
+    } else if (balances.containsKey(userEmail)) {
+      userKey = userEmail!;
+    }
+    final currentUserBalance = userKey.isNotEmpty ? balances[userKey] ?? 0.0 : 0.0;
     // Filter to show only people who owe you money (negative balances for others)
     final peopleWhoOweYou = balances.entries
-        .where((entry) => entry.key != 'You' && entry.value < 0)
+        .where((entry) => entry.key != userKey && entry.value < 0)
         .toList();
-    
     // Filter to show people you owe money to (positive balances for others)
     final peopleYouOwe = balances.entries
-        .where((entry) => entry.key != 'You' && entry.value > 0)
+        .where((entry) => entry.key != userKey && entry.value > 0)
         .toList();
-
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -294,7 +323,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
             // Your overall balance
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -304,7 +332,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  '${currentUserBalance >= 0 ? '+' : ''}${currentUserBalance.toStringAsFixed(2)}',
+                  '${currentUserBalance >= 0 ? '+' : ''}${currencyProvider.formatAmount(currentUserBalance)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: currentUserBalance >= 0 ? Colors.green : Colors.red,
@@ -313,7 +341,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ],
             ),
             const Divider(height: 24),
-            
             // People who owe you money
             if (peopleWhoOweYou.isNotEmpty) ...[
               const Text(
@@ -324,7 +351,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ...peopleWhoOweYou.map((entry) {
                 final name = entry.key;
                 final amount = entry.value.abs(); // Make positive for display
-                
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -332,7 +358,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     children: [
                       Text(name),
                       Text(
-                        '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
+                        currencyProvider.formatAmount(amount),
                         style: const TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
@@ -344,7 +370,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               }).toList(),
               const Divider(height: 16),
             ],
-            
             // People you owe money to
             if (peopleYouOwe.isNotEmpty) ...[
               const Text(
@@ -355,7 +380,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               ...peopleYouOwe.map((entry) {
                 final name = entry.key;
                 final amount = entry.value; // Already positive
-                
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -363,7 +387,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     children: [
                       Text(name),
                       Text(
-                        '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
+                        currencyProvider.formatAmount(amount),
                         style: const TextStyle(
                           color: Colors.red,
                           fontWeight: FontWeight.bold,
@@ -374,7 +398,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 );
               }).toList(),
             ],
-            
             // Add settle up button
             if (peopleWhoOweYou.isNotEmpty || peopleYouOwe.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -401,6 +424,74 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
 
   // Add a method to show the settle up dialog
   void _showSettleUpDialog() {
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid;
+    final userEmail = user?.email;
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+    final selectedCurrency = currencyProvider.selectedCurrency;
+    // Recalculate balances in memory using original transaction data
+    Map<String, double> balances = {};
+    if (_activity != null && _activity!['members'] != null) {
+      for (var member in _activity!['members']) {
+        final id = member is Map ? (member['id'] ?? member['email'] ?? member['name']) : member;
+        balances[id] = 0.0;
+      }
+    }
+    for (var transaction in _transactions) {
+      final paidBy = transaction['paid_by'] ?? '';
+      final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+      final originalCurrency = transaction['currency'] ?? 'USD';
+      final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+        (c) => c.code == originalCurrency,
+        orElse: () => selectedCurrency,
+      );
+      final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+      final split = transaction['split'] ?? 'equally';
+      final participants = List<String>.from(transaction['participants'] ?? []);
+      if (transaction['is_settlement'] == true) {
+        continue;
+      }
+      if (split == 'equally' && participants.isNotEmpty) {
+        final sharePerPerson = amount / participants.length;
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
+        }
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+      } else if (split == 'unequally' && transaction['shares'] != null) {
+        final shares = Map<String, dynamic>.from(transaction['shares']);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          final shareOriginal = shares[participant]?.toDouble() ?? 0.0;
+          final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+          balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+        }
+        final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
+        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+      } else if (split == 'percentage' && transaction['shares'] != null) {
+        final shares = Map<String, dynamic>.from(transaction['shares']);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+        for (var participant in participants) {
+          final percentage = shares[participant]?.toDouble() ?? 0.0;
+          final shareOriginal = originalAmount * percentage / 100;
+          final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+          balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+        }
+        final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
+        final payerShareOriginal = originalAmount * payerPercentage / 100;
+        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+      }
+    }
+    String userKey = '';
+    if (balances.containsKey(userId)) {
+      userKey = userId!;
+    } else if (balances.containsKey(userEmail)) {
+      userKey = userEmail!;
+    }
+    final peopleWhoOweYou = balances.entries.where((entry) => entry.key != userKey && entry.value < 0).toList();
+    final peopleYouOwe = balances.entries.where((entry) => entry.key != userKey && entry.value > 0).toList();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -412,13 +503,27 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             children: [
               const Text('Select who you want to settle up with:'),
               const SizedBox(height: 16),
-              ..._getSettlementOptions().map((option) {
+              ...peopleWhoOweYou.map((entry) {
+                final name = entry.key;
+                final amount = entry.value.abs();
                 return ListTile(
-                  title: Text(option.name),
-                  subtitle: Text(option.displayText),
+                  title: Text(name),
+                  subtitle: Text('$name owes you ${currencyProvider.formatAmount(amount)}'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showSettlementAmountDialog(option);
+                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: '$name owes you ${currencyProvider.formatAmount(amount)}'));
+                  },
+                );
+              }).toList(),
+              ...peopleYouOwe.map((entry) {
+                final name = entry.key;
+                final amount = entry.value;
+                return ListTile(
+                  title: Text(name),
+                  subtitle: Text('You owe $name ${currencyProvider.formatAmount(amount)}'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: 'You owe $name ${currencyProvider.formatAmount(amount)}'));
                   },
                 );
               }).toList(),
@@ -505,6 +610,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         
         // Reload activity data to update balances
         await _loadActivityData();
+        await _recalculateActivityTotals();
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Settlement recorded successfully')),
@@ -910,47 +1016,208 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
+  // Add this method to recalculate totals and balances whenever transactions change
+  Future<void> _recalculateActivityTotals() async {
+    if (_transactions.isEmpty) {
+      return;
+    }
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+      final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+      final selectedCurrency = currencyProvider.selectedCurrency;
+
+      // Calculate total amount spent in selected currency
+      double totalAmount = 0.0;
+      for (var transaction in _transactions) {
+        final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+        final originalCurrency = transaction['currency'] ?? 'USD';
+        final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+          (c) => c.code == originalCurrency,
+          orElse: () => selectedCurrency,
+        );
+        final convertedAmount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+        totalAmount += convertedAmount;
+      }
+
+      // Calculate balances in selected currency
+      Map<String, double> balances = {};
+      if (_activity != null && _activity!['members'] != null) {
+        for (var member in _activity!['members']) {
+          final id = member is Map ? (member['id'] ?? member['email'] ?? member['name']) : member;
+          balances[id] = 0.0;
+        }
+      }
+
+      for (var transaction in _transactions) {
+        final paidBy = transaction['paid_by'] ?? '';
+        final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+        final originalCurrency = transaction['currency'] ?? 'USD';
+        final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+          (c) => c.code == originalCurrency,
+          orElse: () => selectedCurrency,
+        );
+        final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+        final split = transaction['split'] ?? 'equally';
+        final participants = List<String>.from(transaction['participants'] ?? []);
+        if (transaction['is_settlement'] == true) {
+          continue;
+        }
+        if (split == 'equally' && participants.isNotEmpty) {
+          final sharePerPerson = amount / participants.length;
+          balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+          for (var participant in participants) {
+            balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
+          }
+          balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+        } else if (split == 'unequally' && transaction['shares'] != null) {
+          final shares = Map<String, dynamic>.from(transaction['shares']);
+          balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+          for (var participant in participants) {
+            final shareOriginal = shares[participant]?.toDouble() ?? 0.0;
+            final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+            balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+          }
+          final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
+          final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+          balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        } else if (split == 'percentage' && transaction['shares'] != null) {
+          final shares = Map<String, dynamic>.from(transaction['shares']);
+          balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+          for (var participant in participants) {
+            final percentage = shares[participant]?.toDouble() ?? 0.0;
+            final shareOriginal = originalAmount * percentage / 100;
+            final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+            balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+          }
+          final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
+          final payerShareOriginal = originalAmount * payerPercentage / 100;
+          final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+          balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        }
+      }
+
+      DocumentReference activityRef;
+      if (_isCreator) {
+        activityRef = _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('activities')
+            .doc(widget.activityId);
+      } else {
+        activityRef = _firestore
+            .collection('users')
+            .doc(widget.ownerId)
+            .collection('activities')
+            .doc(widget.activityId);
+      }
+
+      await activityRef.update({
+        'totalAmount': totalAmount,
+        'balances': balances,
+      });
+
+      await _loadActivityData();
+    } catch (e) {
+      print('Error recalculating totals: $e');
+    }
+  }
+
+  Future<void> _deleteTransactionAndRefresh(String transactionId) async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      DocumentReference activityRef = _isCreator
+          ? _firestore.collection('users').doc(user.uid).collection('activities').doc(widget.activityId)
+          : _firestore.collection('users').doc(widget.ownerId).collection('activities').doc(widget.activityId);
+      await activityRef.collection('transactions').doc(transactionId).delete();
+      await _recalculateActivityTotals();
+      await _loadActivityData();
+    }
+  }
+
+  Widget _buildActivitySummary() {
+    if (_activity == null) return const SizedBox();
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    final selectedCurrency = currencyProvider.selectedCurrency;
+    // Recalculate total spent in memory using all transactions
+    double totalAmount = 0.0;
+    for (var transaction in _transactions) {
+      final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+      final originalCurrency = transaction['currency'] ?? 'USD';
+      final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+        (c) => c.code == originalCurrency,
+        orElse: () => selectedCurrency,
+      );
+      final convertedAmount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+      totalAmount += convertedAmount;
+    }
+    final displayTotal = currencyProvider.formatAmount(totalAmount);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _activity!['name'] ?? 'Activity',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.attach_money, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text('Total: $displayTotal'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         title: Text(_activity?['name'] ?? 'Activity Details'),
         backgroundColor: const Color(0xFFF5A9C1),
         actions: [
-          IconButton(
-  icon: Icon(Icons.edit),
-  onPressed: () async {
-    final updated = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => EditActivityScreen(activityData: _activity!),
-      ),
-    );
+          // Only show edit button if user is the creator
+          if (_isCreator)
+            IconButton(
+              icon: Icon(Icons.edit),
+              onPressed: () async {
+                final updated = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditActivityScreen(activityData: _activity!),
+                  ),
+                );
 
-    // Check if update happened, then reload
-    if (updated == true) {
-      _loadActivityData();
-    }
-  },
-),
-
-
+                // Check if update happened, then reload
+                if (updated == true) {
+                  _loadActivityData();
+                }
+              },
+            ),
         ],
       ),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _activity == null
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _activity == null
               ? const Center(child: Text('Activity not found'))
-              : RefreshIndicator(
-                onRefresh: _loadActivityData,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
+              : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildActivitySummary(),
                       // Activity Header
                       Card(
                         shape: RoundedRectangleBorder(
@@ -1030,29 +1297,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                               const SizedBox(height: 16),
                               const Divider(),
                               const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Total spent',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    '\$${(_activity!['totalAmount'] ?? 0.0).toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              const Divider(),
-                              const SizedBox(height: 8),
                               _buildBalancesCard(),
                               const SizedBox(height: 8),
                             ],
@@ -1077,11 +1321,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder:
-                                      (_) => AddExpenseScreen(
-                                        activityId: _activity!['id'],
-                                        activityName: _activity!['name'],
-                                      ),
+                                  builder: (_) => AddExpenseScreen(
+                                    activityId: _activity!['id'],
+                                    activityName: _activity!['name'],
+                                    ownerId: widget.ownerId,
+                                  ),
                                 ),
                               );
                             },
@@ -1115,16 +1359,15 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     ],
                   ),
                 ),
-              ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder:
-                  (_) => AddExpenseScreen(
-                    activityId: _activity!['id'],
-                    activityName: _activity!['name'],
-                  ),
+              builder: (_) => AddExpenseScreen(
+                activityId: _activity!['id'],
+                activityName: _activity!['name'],
+                ownerId: widget.ownerId,
+              ),
             ),
           );
         },

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_gate.dart';
 import 'services/theme_service.dart';
 import 'firebase_options.dart';
+import 'providers/currency_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,8 +21,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => ThemeService(prefs),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeService(prefs)),
+        ChangeNotifierProvider(create: (_) => CurrencyProvider()),
+      ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
           return MaterialApp(

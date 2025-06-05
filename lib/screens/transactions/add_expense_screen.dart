@@ -10,12 +10,15 @@ import '../../services/currency_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String activityId;
-  final String activityName;
+  final String? activityName;
+  final String? ownerId;
 
+  // Constructor that accepts both old and new parameter formats
   const AddExpenseScreen({
-    super.key,
+    super.key, 
     required this.activityId,
-    required this.activityName,
+    this.activityName,
+    this.ownerId,
   });
 
   @override
@@ -242,6 +245,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
 
     final user = _auth.currentUser!;
+    final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
+    final ownerId = selectedActivity['ownerId'] ?? user.uid;
     final expense = {
       'title': _titleController.text.trim(),
       'amount': double.tryParse(_amountController.text.trim()) ?? 0,
@@ -255,6 +260,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           .map((entry) => entry.key)
           .toList(),
       if (_base64Image != null) 'receipt_image': _base64Image, 
+      'timestamp': FieldValue.serverTimestamp(),
     };
 
     // Handle different split methods
@@ -288,7 +294,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     await _firestore
         .collection('users')
-        .doc(user.uid)
+        .doc(ownerId)
         .collection('activities')
         .doc(selectedActivityId)
         .collection('transactions')
