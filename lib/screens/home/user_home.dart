@@ -192,7 +192,7 @@ class _UserHomePageState extends State<UserHomePage> {
             for (var participant in participants) {
               balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
             }
-            balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+            // Note: paidBy is already included in participants loop above, so no need to deduct again
           } else if (split == 'unequally' && transaction['shares'] != null) {
             final shares = Map<String, dynamic>.from(transaction['shares']);
             balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -201,9 +201,7 @@ class _UserHomePageState extends State<UserHomePage> {
               final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
               balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
             }
-            final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
-            final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-            balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+            // Note: paidBy is already included in participants loop above, so no need to deduct again
           } else if (split == 'percentage' && transaction['shares'] != null) {
             final shares = Map<String, dynamic>.from(transaction['shares']);
             balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -213,42 +211,40 @@ class _UserHomePageState extends State<UserHomePage> {
               final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
               balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
             }
-            final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
-            final payerShareOriginal = originalAmount * payerPercentage / 100;
-            final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-            balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+            // Note: paidBy is already included in participants loop above, so no need to deduct again
           }
         }
 
-        // Find user's balance using multiple possible keys
-        String userKey = '';
-        double userBalance = 0.0;
+        // Consolidate all user balance entries into a single entry
+        // Find all possible keys that represent the current user
+        Set<String> userKeys = {};
+        if (user.uid.isNotEmpty) userKeys.add(user.uid);
+        if (user.email != null && user.email!.isNotEmpty) userKeys.add(user.email!);
+        userKeys.add('You'); // Always include "You" as a possible user key
 
-        // Try different ways to identify the current user
-        if (balances.containsKey('You')) {
-          userKey = 'You';
-          userBalance = balances['You'] ?? 0.0;
-        } else if (balances.containsKey(user.uid)) {
-          userKey = user.uid;
-          userBalance = balances[userKey] ?? 0.0;
-        } else if (balances.containsKey(user.email)) {
-          userKey = user.email ?? '';
-          userBalance = balances[userKey] ?? 0.0;
-        } else {
-          // Try to find by matching member data
-          for (var member in activityMembers) {
-            if (member is Map<String, dynamic>) {
-              if (member['id'] == user.uid || member['email'] == user.email) {
-                final memberKey = member['id'] ?? member['email'] ?? member['name'];
-                if (balances.containsKey(memberKey)) {
-                  userKey = memberKey;
-                  userBalance = balances[memberKey] ?? 0.0;
-                  break;
-                }
-              }
+        // Add any member keys that match the current user
+        for (var member in activityMembers) {
+          if (member is Map<String, dynamic>) {
+            if (member['id'] == user.uid || member['email'] == user.email) {
+              final memberKey = member['id'] ?? member['email'] ?? member['name'];
+              if (memberKey != null) userKeys.add(memberKey);
             }
           }
         }
+
+        // Consolidate all user balances into a single value
+        double userBalance = 0.0;
+        for (String key in userKeys) {
+          if (balances.containsKey(key)) {
+            userBalance += balances[key] ?? 0.0;
+            // Remove the entry to avoid double counting in other calculations
+            balances.remove(key);
+          }
+        }
+
+        // Store the consolidated balance under the user's UID for consistency
+        final userKey = user.uid;
+        balances[userKey] = userBalance;
 
         if (userBalance > 0) {
           // Positive balance means user is owed money

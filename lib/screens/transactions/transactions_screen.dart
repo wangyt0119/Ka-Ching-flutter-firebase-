@@ -90,24 +90,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
 
             if (paidBy == 'You' || paidBy == user.uid || paidBy == user.email) {
-              // User paid - they get money back
+              // User paid - they get money back (total paid minus their share)
               if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
                 if (transactionData['split'] == 'equally') {
-                  userShare = totalAmount / participants.length;
+                  final userOwes = totalAmount / participants.length;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
-                  userShare = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  final userOwes = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
                   final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
-                  userShare = totalAmount * percentage / 100;
+                  final userOwes = totalAmount * percentage / 100;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 }
               }
             } else {
               // Someone else paid - user owes money
               if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
                 if (transactionData['split'] == 'equally') {
-                  userShare = -totalAmount / participants.length;
+                  userShare = -(totalAmount / participants.length);
                 } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
                   userShare = -(shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0);
@@ -179,24 +182,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
 
             if (paidBy == 'You' || paidBy == user.uid || paidBy == user.email) {
-              // User paid - they get money back
+              // User paid - they get money back (total paid minus their share)
               if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
                 if (transactionData['split'] == 'equally') {
-                  userShare = totalAmount / participants.length;
+                  final userOwes = totalAmount / participants.length;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
-                  userShare = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  final userOwes = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
                   final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
-                  userShare = totalAmount * percentage / 100;
+                  final userOwes = totalAmount * percentage / 100;
+                  userShare = totalAmount - userOwes; // Amount they get back from others
                 }
               }
             } else {
               // Someone else paid - user owes money
               if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
                 if (transactionData['split'] == 'equally') {
-                  userShare = -totalAmount / participants.length;
+                  userShare = -(totalAmount / participants.length);
                 } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
                   final shares = Map<String, dynamic>.from(transactionData['shares']);
                   userShare = -(shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0);

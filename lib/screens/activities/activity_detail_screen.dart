@@ -277,7 +277,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         for (var participant in participants) {
           balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
         }
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'unequally' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -286,9 +286,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
-        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'percentage' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -298,26 +296,38 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
-        final payerShareOriginal = originalAmount * payerPercentage / 100;
-        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       }
     }
-    String userKey = '';
-    if (balances.containsKey(userId)) {
-      userKey = userId!;
-    } else if (balances.containsKey(userEmail)) {
-      userKey = userEmail!;
+    // Consolidate all user balance entries into a single entry
+    // Find all possible keys that represent the current user
+    Set<String> userKeys = {};
+    if (userId != null) userKeys.add(userId);
+    if (userEmail != null) userKeys.add(userEmail);
+    userKeys.add('You'); // Always include "You" as a possible user key
+
+    // Consolidate all user balances into a single value
+    double currentUserBalance = 0.0;
+    for (String key in userKeys) {
+      if (balances.containsKey(key)) {
+        currentUserBalance += balances[key] ?? 0.0;
+        // Remove the entry to avoid double counting in settlement options
+        balances.remove(key);
+      }
     }
-    final currentUserBalance = userKey.isNotEmpty ? balances[userKey] ?? 0.0 : 0.0;
+
+    // Store the consolidated balance under the user's UID for consistency
+    if (userId != null) {
+      balances[userId] = currentUserBalance;
+    }
+
     // Filter to show only people who owe you money (negative balances for others)
     final peopleWhoOweYou = balances.entries
-        .where((entry) => entry.key != userKey && entry.value < 0)
+        .where((entry) => !userKeys.contains(entry.key) && entry.value < 0)
         .toList();
     // Filter to show people you owe money to (positive balances for others)
     final peopleYouOwe = balances.entries
-        .where((entry) => entry.key != userKey && entry.value > 0)
+        .where((entry) => !userKeys.contains(entry.key) && entry.value > 0)
         .toList();
     return Card(
       shape: RoundedRectangleBorder(
@@ -494,7 +504,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         for (var participant in participants) {
           balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
         }
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'unequally' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -503,9 +513,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
-        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'percentage' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -515,20 +523,33 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
-        final payerShareOriginal = originalAmount * payerPercentage / 100;
-        final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
-        balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+        // Note: paidBy is already included in participants loop above, so no need to deduct again
       }
     }
-    String userKey = '';
-    if (balances.containsKey(userId)) {
-      userKey = userId!;
-    } else if (balances.containsKey(userEmail)) {
-      userKey = userEmail!;
+    // Consolidate all user balance entries into a single entry
+    // Find all possible keys that represent the current user
+    Set<String> userKeys = {};
+    if (userId != null) userKeys.add(userId);
+    if (userEmail != null) userKeys.add(userEmail);
+    userKeys.add('You'); // Always include "You" as a possible user key
+
+    // Consolidate all user balances into a single value
+    double consolidatedUserBalance = 0.0;
+    for (String key in userKeys) {
+      if (balances.containsKey(key)) {
+        consolidatedUserBalance += balances[key] ?? 0.0;
+        // Remove the entry to avoid double counting in settlement options
+        balances.remove(key);
+      }
     }
-    final peopleWhoOweYou = balances.entries.where((entry) => entry.key != userKey && entry.value < 0).toList();
-    final peopleYouOwe = balances.entries.where((entry) => entry.key != userKey && entry.value > 0).toList();
+
+    // Store the consolidated balance under the user's UID for consistency (but don't include in settlement options)
+    if (userId != null && consolidatedUserBalance != 0.0) {
+      balances[userId] = consolidatedUserBalance;
+    }
+
+    final peopleWhoOweYou = balances.entries.where((entry) => !userKeys.contains(entry.key) && entry.value < 0).toList();
+    final peopleYouOwe = balances.entries.where((entry) => !userKeys.contains(entry.key) && entry.value > 0).toList();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1169,7 +1190,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           for (var participant in participants) {
             balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
           }
-          balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+          // Note: paidBy is already included in participants loop above, so no need to deduct again
         } else if (split == 'unequally' && transaction['shares'] != null) {
           final shares = Map<String, dynamic>.from(transaction['shares']);
           balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -1178,9 +1199,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             final shareConverted = currencyProvider.convertCurrency(shareOriginal, fromCurrency, baseCurrencyObj);
             balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
           }
-          final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
-          final payerShareConverted = currencyProvider.convertCurrency(payerShareOriginal, fromCurrency, baseCurrencyObj);
-          balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+          // Note: paidBy is already included in participants loop above, so no need to deduct again
         } else if (split == 'percentage' && transaction['shares'] != null) {
           final shares = Map<String, dynamic>.from(transaction['shares']);
           balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -1190,11 +1209,30 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             final shareConverted = currencyProvider.convertCurrency(shareOriginal, fromCurrency, baseCurrencyObj);
             balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
           }
-          final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
-          final payerShareOriginal = originalAmount * payerPercentage / 100;
-          final payerShareConverted = currencyProvider.convertCurrency(payerShareOriginal, fromCurrency, baseCurrencyObj);
-          balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+          // Note: paidBy is already included in participants loop above, so no need to deduct again
         }
+      }
+
+      // Consolidate all user balance entries into a single entry before saving to database
+      // Find all possible keys that represent the current user
+      Set<String> userKeys = {};
+      if (user.uid.isNotEmpty) userKeys.add(user.uid);
+      if (user.email != null && user.email!.isNotEmpty) userKeys.add(user.email!);
+      userKeys.add('You'); // Always include "You" as a possible user key
+
+      // Consolidate all user balances into a single value
+      double consolidatedUserBalance = 0.0;
+      for (String key in userKeys) {
+        if (balances.containsKey(key)) {
+          consolidatedUserBalance += balances[key] ?? 0.0;
+          // Remove the entry to avoid multiple user entries in database
+          balances.remove(key);
+        }
+      }
+
+      // Store the consolidated balance under the user's UID for consistency
+      if (consolidatedUserBalance != 0.0) {
+        balances[user.uid] = consolidatedUserBalance;
       }
 
       DocumentReference activityRef;
