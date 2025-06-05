@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
-import 'add_expense_screen.dart';
-import '../../services/currency_service.dart';
-import '../settings/currency_screen.dart';
 import 'transaction_detail_screen.dart';
-import '../activities/activity_detail_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/currency_provider.dart';
 
@@ -55,92 +50,166 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        // Get all users (to find activities where user is a participant)
-        final usersSnapshot = await _firestore.collection('users').get();
         List<Map<String, dynamic>> transactions = [];
 
-        for (var userDoc in usersSnapshot.docs) {
-          final ownerId = userDoc.id;
-        final activitiesSnapshot = await _firestore
+        // First, get user's own activities (more efficient)
+        final ownActivitiesSnapshot = await _firestore
             .collection('users')
-              .doc(ownerId)
+            .doc(user.uid)
             .collection('activities')
             .get();
-        
-        for (var activityDoc in activitiesSnapshot.docs) {
+
+        // Process user's own activities
+        for (var activityDoc in ownActivitiesSnapshot.docs) {
           final activityData = activityDoc.data();
-            final activityId = activityDoc.id;
-            final activityName = activityData['name'] ?? 'Unnamed Activity';
-            final members = activityData['members'] as List<dynamic>? ?? [];
-          
-            // Check if current user is a participant or owner
-            bool isParticipant = false;
-            for (var member in members) {
-              if (member is Map<String, dynamic> &&
-                  (member['id'] == user.uid || member['email'] == user.email || member['name'] == 'You')) {
-                isParticipant = true;
-                break;
-              }
-            }
-            if (ownerId == user.uid) isParticipant = true;
-            if (!isParticipant) continue;
+          final activityId = activityDoc.id;
+          final activityName = activityData['name'] ?? 'Unnamed Activity';
 
-            // Get transactions for this activity
-            final transactionsSnapshot = await _firestore
-                .collection('users')
-                .doc(ownerId)
-                .collection('activities')
-                .doc(activityId)
-                .collection('transactions')
-                .orderBy('timestamp', descending: true)
-                .get();
+          // Get transactions for this activity
+          final transactionsSnapshot = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('activities')
+              .doc(activityId)
+              .collection('transactions')
+              .orderBy('timestamp', descending: true)
+              .limit(50) // Limit to recent transactions for performance
+              .get();
 
-            for (var transactionDoc in transactionsSnapshot.docs) {
-              final transactionData = transactionDoc.data();
-              transactionData['id'] = transactionDoc.id;
-              transactionData['activityId'] = activityId;
-              transactionData['activityName'] = activityName;
-              transactionData['ownerId'] = ownerId;
+          for (var transactionDoc in transactionsSnapshot.docs) {
+            final transactionData = transactionDoc.data();
+            transactionData['id'] = transactionDoc.id;
+            transactionData['activityId'] = activityId;
+            transactionData['activityName'] = activityName;
+            transactionData['ownerId'] = user.uid;
 
-              // Only show if user is a participant or payer
-              final participants = List<String>.from(transactionData['participants'] ?? []);
-              final paidBy = transactionData['paid_by'];
-              if (participants.contains('You') || paidBy == 'You' || ownerId == user.uid) {
-                // Calculate user's share in this transaction
-                double userShare = 0.0;
-                if (paidBy == 'You') {
-                  final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
-                  if (participants.contains('You')) {
-                    if (transactionData['split'] == 'equally') {
-                      userShare = totalAmount / participants.length;
-                    } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
-                      final shares = Map<String, dynamic>.from(transactionData['shares']);
-                      userShare = shares['You']?.toDouble() ?? 0.0;
-                    } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
-                      final shares = Map<String, dynamic>.from(transactionData['shares']);
-                      final percentage = shares['You']?.toDouble() ?? 0.0;
-                      userShare = totalAmount * percentage / 100;
-                    }
-                  }
-                } else {
-                  final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
-                  if (participants.contains('You')) {
-                    if (transactionData['split'] == 'equally') {
-                      userShare = -totalAmount / participants.length;
-                    } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
-                      final shares = Map<String, dynamic>.from(transactionData['shares']);
-                      userShare = -(shares['You']?.toDouble() ?? 0.0);
-                    } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
-                      final shares = Map<String, dynamic>.from(transactionData['shares']);
-                      final percentage = shares['You']?.toDouble() ?? 0.0;
-                      userShare = -(totalAmount * percentage / 100);
-                    }
-                  }
+            // Calculate user's share
+            double userShare = 0.0;
+            final participants = List<String>.from(transactionData['participants'] ?? []);
+            final paidBy = transactionData['paid_by'];
+            final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
+
+            if (paidBy == 'You' || paidBy == user.uid || paidBy == user.email) {
+              // User paid - they get money back
+              if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
+                if (transactionData['split'] == 'equally') {
+                  userShare = totalAmount / participants.length;
+                } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  userShare = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = totalAmount * percentage / 100;
                 }
-                transactionData['userShare'] = userShare;
-                transactions.add(transactionData);
+              }
+            } else {
+              // Someone else paid - user owes money
+              if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
+                if (transactionData['split'] == 'equally') {
+                  userShare = -totalAmount / participants.length;
+                } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  userShare = -(shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0);
+                } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = -(totalAmount * percentage / 100);
+                }
               }
             }
+
+            transactionData['userShare'] = userShare;
+            transactions.add(transactionData);
+          }
+        }
+
+        // Then get activities where user is a participant (but not owner)
+        // Use a more targeted approach - limit to recent activities
+        final recentActivitiesSnapshot = await _firestore
+            .collectionGroup('activities')
+            .where('createdAt', isGreaterThan: Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 90))))
+            .limit(100) // Limit for performance
+            .get();
+
+        for (var activityDoc in recentActivitiesSnapshot.docs) {
+          final activityData = activityDoc.data();
+          final activityId = activityDoc.id;
+          final activityName = activityData['name'] ?? 'Unnamed Activity';
+          final ownerId = activityData['createdBy'];
+
+          // Skip if this is user's own activity (already processed above)
+          if (ownerId == user.uid) continue;
+
+          // Check if user is a participant
+          final members = activityData['members'] as List<dynamic>? ?? [];
+          bool isParticipant = false;
+          for (var member in members) {
+            if (member is Map<String, dynamic> &&
+                (member['id'] == user.uid || member['email'] == user.email)) {
+              isParticipant = true;
+              break;
+            }
+          }
+
+          if (!isParticipant) continue;
+
+          // Get transactions for this activity
+          final transactionsSnapshot = await _firestore
+              .collection('users')
+              .doc(ownerId)
+              .collection('activities')
+              .doc(activityId)
+              .collection('transactions')
+              .orderBy('timestamp', descending: true)
+              .limit(50) // Limit for performance
+              .get();
+
+          for (var transactionDoc in transactionsSnapshot.docs) {
+            final transactionData = transactionDoc.data();
+            transactionData['id'] = transactionDoc.id;
+            transactionData['activityId'] = activityId;
+            transactionData['activityName'] = activityName;
+            transactionData['ownerId'] = ownerId;
+
+            // Calculate user's share
+            double userShare = 0.0;
+            final participants = List<String>.from(transactionData['participants'] ?? []);
+            final paidBy = transactionData['paid_by'];
+            final totalAmount = transactionData['amount']?.toDouble() ?? 0.0;
+
+            if (paidBy == 'You' || paidBy == user.uid || paidBy == user.email) {
+              // User paid - they get money back
+              if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
+                if (transactionData['split'] == 'equally') {
+                  userShare = totalAmount / participants.length;
+                } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  userShare = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = totalAmount * percentage / 100;
+                }
+              }
+            } else {
+              // Someone else paid - user owes money
+              if (participants.contains('You') || participants.contains(user.uid) || participants.contains(user.email)) {
+                if (transactionData['split'] == 'equally') {
+                  userShare = -totalAmount / participants.length;
+                } else if (transactionData['split'] == 'unequally' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  userShare = -(shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0);
+                } else if (transactionData['split'] == 'percentage' && transactionData['shares'] != null) {
+                  final shares = Map<String, dynamic>.from(transactionData['shares']);
+                  final percentage = shares['You']?.toDouble() ?? shares[user.uid]?.toDouble() ?? shares[user.email]?.toDouble() ?? 0.0;
+                  userShare = -(totalAmount * percentage / 100);
+                }
+              }
+            }
+
+            transactionData['userShare'] = userShare;
+            transactions.add(transactionData);
           }
         }
 
@@ -200,7 +269,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final currencyProvider = Provider.of<CurrencyProvider>(context);
-    final selectedCurrency = currencyProvider.selectedCurrency;
     final filteredTransactions = _filterTransactions(_allTransactions);
 
     return Scaffold(
@@ -419,7 +487,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     : null,
                 onTap: () async {
                   await currencyProvider.setSelectedCurrency(currency);
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.pop(context);
                   }
                   },
