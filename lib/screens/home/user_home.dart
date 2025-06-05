@@ -470,7 +470,14 @@ class _UserHomePageState extends State<UserHomePage> {
                     .toString()
                     .split(' ')[0] ??
                 '';
-            final total = activity['totalAmount']?.toDouble() ?? 0.0;
+            // The stored totalAmount is in USD base currency, convert to display currency
+            final totalInUSD = activity['totalAmount']?.toDouble() ?? 0.0;
+            final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+            final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
+              (c) => c.code == 'USD',
+              orElse: () => currencyProvider.selectedCurrency,
+            );
+            final total = currencyProvider.convertCurrency(totalInUSD, baseCurrencyObj, currencyProvider.selectedCurrency);
             final balances = Map<String, dynamic>.from(activity['balances'] ?? {});
 
             // Find user balance using multiple possible keys

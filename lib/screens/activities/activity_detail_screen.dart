@@ -1087,9 +1087,15 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       final user = _auth.currentUser;
       if (user == null) return;
       final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
-      final selectedCurrency = currencyProvider.selectedCurrency;
 
-      // Calculate total amount spent in selected currency (excluding settlements)
+      // Use USD as the universal base currency for database storage
+      // This ensures consistency regardless of when transactions were created
+      final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
+        (c) => c.code == 'USD',
+        orElse: () => currencyProvider.selectedCurrency,
+      );
+
+      // Calculate total amount spent in USD BASE CURRENCY (excluding settlements)
       double totalAmount = 0.0;
       for (var transaction in _transactions) {
         // Skip settlement transactions when calculating total spent
@@ -1101,13 +1107,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         final originalCurrency = transaction['currency'] ?? 'USD';
         final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
           (c) => c.code == originalCurrency,
-          orElse: () => selectedCurrency,
+          orElse: () => baseCurrencyObj,
         );
-        final convertedAmount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+        // Convert to USD base currency for consistent database storage
+        final convertedAmount = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
         totalAmount += convertedAmount;
       }
 
-      // Calculate balances in selected currency
+      // Calculate balances in USD BASE CURRENCY
       Map<String, double> balances = {};
       if (_activity != null && _activity!['members'] != null) {
         for (var member in _activity!['members']) {
@@ -1122,9 +1129,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         final originalCurrency = transaction['currency'] ?? 'USD';
         final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
           (c) => c.code == originalCurrency,
-          orElse: () => selectedCurrency,
+          orElse: () => baseCurrencyObj,
         );
-        final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+        // Convert to USD base currency for consistent database storage
+        final amount = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
         final split = transaction['split'] ?? 'equally';
         final participants = List<String>.from(transaction['participants'] ?? []);
 
@@ -1167,11 +1175,11 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
           for (var participant in participants) {
             final shareOriginal = shares[participant]?.toDouble() ?? 0.0;
-            final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+            final shareConverted = currencyProvider.convertCurrency(shareOriginal, fromCurrency, baseCurrencyObj);
             balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
           }
           final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
-          final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+          final payerShareConverted = currencyProvider.convertCurrency(payerShareOriginal, fromCurrency, baseCurrencyObj);
           balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
         } else if (split == 'percentage' && transaction['shares'] != null) {
           final shares = Map<String, dynamic>.from(transaction['shares']);
@@ -1179,12 +1187,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           for (var participant in participants) {
             final percentage = shares[participant]?.toDouble() ?? 0.0;
             final shareOriginal = originalAmount * percentage / 100;
-            final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+            final shareConverted = currencyProvider.convertCurrency(shareOriginal, fromCurrency, baseCurrencyObj);
             balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
           }
           final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
           final payerShareOriginal = originalAmount * payerPercentage / 100;
-          final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+          final payerShareConverted = currencyProvider.convertCurrency(payerShareOriginal, fromCurrency, baseCurrencyObj);
           balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
         }
       }
@@ -1231,8 +1239,15 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     if (_activity == null) return const SizedBox();
     final currencyProvider = Provider.of<CurrencyProvider>(context);
     final selectedCurrency = currencyProvider.selectedCurrency;
-    // Recalculate total spent in memory using all transactions (excluding settlements)
-    double totalAmount = 0.0;
+
+    // Use the same logic as database storage: convert to USD first, then to display currency
+    final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
+      (c) => c.code == 'USD',
+      orElse: () => currencyProvider.selectedCurrency,
+    );
+
+    // Calculate total spent in USD base currency (excluding settlements)
+    double totalAmountInUSD = 0.0;
     for (var transaction in _transactions) {
       // Skip settlement transactions when calculating total spent
       if (transaction['is_settlement'] == true) {
@@ -1243,12 +1258,16 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       final originalCurrency = transaction['currency'] ?? 'USD';
       final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
         (c) => c.code == originalCurrency,
-        orElse: () => selectedCurrency,
+        orElse: () => baseCurrencyObj,
       );
-      final convertedAmount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
-      totalAmount += convertedAmount;
+      // Convert to USD base currency first
+      final convertedAmountInUSD = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
+      totalAmountInUSD += convertedAmountInUSD;
     }
-    final displayTotal = currencyProvider.formatAmount(totalAmount);
+
+    // Now convert from USD to selected display currency
+    final totalAmountInDisplayCurrency = currencyProvider.convertCurrency(totalAmountInUSD, baseCurrencyObj, selectedCurrency);
+    final displayTotal = currencyProvider.formatAmount(totalAmountInDisplayCurrency);
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

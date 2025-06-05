@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../theme/app_theme.dart';
 
 class AddActivityScreen extends StatefulWidget {
@@ -133,6 +135,10 @@ Future<void> _createActivity() async {
               )
               .toList();
 
+      // Get the user's current currency
+      final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+      final currentCurrency = currencyProvider.selectedCurrency.code;
+
       // Create activity document
       await activityRef.set({
         'name': _nameController.text.trim(),
@@ -142,6 +148,7 @@ Future<void> _createActivity() async {
         'createdBy': user.uid, // Store user ID for chart compatibility
         'createdByName': _userName, // Store full name for display purposes
         'activity_id': activityRef.id,
+        'currency': currentCurrency, // Store the activity's base currency
       });
 
       // Navigate back and show success message
