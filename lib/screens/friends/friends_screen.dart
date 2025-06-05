@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'pending_invitations_widget.dart';
 
 class FriendsScreen extends StatefulWidget {
-  const FriendsScreen({super.key});
+  const FriendsScreen({Key? key}) : super(key: key);
 
   @override
   State<FriendsScreen> createState() => _FriendsScreenState();
@@ -34,42 +35,72 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
     try {
       final User? currentUser = _auth.currentUser;
-      if (currentUser != null) {
-        // Create invitation in Firestore
-        await _firestore.collection('invitations').add({
-          'sender_id': currentUser.uid,
-          'sender_email': currentUser.email,
-          'receiver_email': _emailController.text,
-          'status': 'pending',
-          'created_at': FieldValue.serverTimestamp(),
-        });
+      if (currentUser == null) {
+        setState(() => isLoading = false);
+        return;
+      }
+      
+      // Get current user data
+      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final userData = userDoc.data() ?? {};
+      final String currentUserName = userData['full_name'] ?? 'User';
 
-        // Create Gmail invitation link
+      // Check if the email exists in Firebase Auth
+      final userQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: _emailController.text)
+          .limit(1)
+          .get();
+      
+      final bool userExists = userQuery.docs.isNotEmpty;
+      String? receiverId;
+      
+      if (userExists) {
+        receiverId = userQuery.docs.first.id;
+      }
+      
+      // Create invitation in Firestore
+      await _firestore.collection('invitations').add({
+        'sender_id': currentUser.uid,
+        'sender_email': currentUser.email,
+        'sender_name': currentUserName,
+        'receiver_email': _emailController.text,
+        'receiver_id': receiverId,
+        'status': 'pending',
+        'user_exists': userExists,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      // Only send email if user doesn't exist in the app
+      if (!userExists) {
+        final String emailBody = 'Hi! I would like to invite you to join Ka-Ching, my expense tracking app. Click here to join: https://your-app-link.com/invite/${currentUser.uid}';
+
         final Uri emailLaunchUri = Uri(
           scheme: 'mailto',
           path: _emailController.text,
           queryParameters: {
             'subject': 'Join me on Ka-Ching!',
-            'body':
-                'Hi! I would like to invite you to join Ka-Ching, my expense tracking app. '
-                'Click here to join: https://your-app-link.com/invite/${currentUser.uid}',
+            'body': emailBody,
           },
         );
 
         if (await canLaunchUrl(emailLaunchUri)) {
           await launchUrl(emailLaunchUri);
-          _emailController.clear();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invitation sent successfully')),
-          );
         } else {
           throw 'Could not launch email client';
         }
       }
+      
+      _emailController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userExists 
+            ? 'Friend request sent' 
+            : 'Invitation email sent')),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error sending invitation: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sending invitation: $e'))
+      );
     } finally {
       setState(() => isLoading = false);
     }
@@ -147,14 +178,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ],
             ),
           ),
-
+          
+          // Add the pending invitations widget
+          PendingInvitationsWidget(),
+          
           // Friends List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream:
                   _firestore
+                      .collection('users')
+                      .doc(_auth.currentUser?.uid)
                       .collection('friends')
-                      .where('user_id', isEqualTo: _auth.currentUser?.uid)
                       .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -181,24 +216,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   itemCount: friends.length,
                   itemBuilder: (context, index) {
                     final friend = friends[index];
+                    final friendData = friend.data() as Map<String, dynamic>;
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: Color(0xFFF5A9C1),
                         child: Text(
-                          friend['friend_name'][0].toUpperCase(),
+                          friendData['name'][0].toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      title: Text(friend['friend_name']),
-                      subtitle: Text(friend['friend_email']),
+                      title: Text(friendData['name']),
+                      subtitle: Text(friendData['email']),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () async {
                           try {
                             await _firestore
+                                .collection('users')
+                                .doc(_auth.currentUser?.uid)
                                 .collection('friends')
                                 .doc(friend.id)
                                 .delete();

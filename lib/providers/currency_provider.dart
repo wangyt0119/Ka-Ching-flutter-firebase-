@@ -49,6 +49,7 @@ class CurrencyProvider extends ChangeNotifier {
       await _currencyService.setSelectedCurrency(currency);
       _selectedCurrency = currency;
       _errorMessage = null;
+      _lastUpdated = DateTime.now();
     } catch (e) {
       _errorMessage = 'Could not change currency: ${e.toString()}';
     } finally {
@@ -59,30 +60,22 @@ class CurrencyProvider extends ChangeNotifier {
 
   // Format an amount according to the selected currency
   String formatAmount(double amount) {
-    // Format based on currency - some currencies don't use decimals
-    if (_selectedCurrency.code == 'JPY' || _selectedCurrency.code == 'IDR') {
-      return '${_selectedCurrency.symbol}${amount.toInt()}';
-    }
-
-    // Handle negative amounts
-    String formattedValue = amount.abs().toStringAsFixed(2);
-
-    // Add thousand separators for better readability
-    final parts = formattedValue.split('.');
-    final wholePart = parts[0].replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    );
-
-    String result = parts.length > 1 ? '$wholePart.${parts[1]}' : wholePart;
-
-    // Add currency symbol and negative sign if needed
-    return '${_selectedCurrency.symbol}${amount < 0 ? '-' : ''}$result';
+    return _selectedCurrency.format(amount);
   }
 
   // Convert an amount from one currency to the selected currency
   double convertToSelectedCurrency(double amount, Currency fromCurrency) {
     return Currency.convert(amount, fromCurrency, _selectedCurrency);
+  }
+
+  // Convert an amount from one currency to another
+  double convertCurrency(double amount, Currency fromCurrency, Currency toCurrency) {
+    return Currency.convert(amount, fromCurrency, toCurrency);
+  }
+
+  // Get a string representation of the exchange rate between two currencies
+  String getExchangeRateString(Currency fromCurrency, Currency toCurrency) {
+    return fromCurrency.getRelativeRateString(toCurrency);
   }
 
   // Force update exchange rates from the API
@@ -110,16 +103,23 @@ class CurrencyProvider extends ChangeNotifier {
     }
   }
 
-  double convertAmount(double amount) {
-    // Assuming all stored amounts are in USD by default
-    Currency usdCurrency =
-        _currencyService.getCurrencyByCode('USD') ??
-        Currency(
-          code: 'USD',
-          name: 'US Dollar',
-          symbol: '\$',
-          exchangeRate: 1.0,
-        );
-    return Currency.convert(amount, usdCurrency, _selectedCurrency);
+  // Get currency by code
+  Currency? getCurrencyByCode(String code) {
+    return _currencyService.getCurrencyByCode(code);
+  }
+
+  // Get currency comparison string
+  String getCurrencyComparison(String currencyCode) {
+    final currency = getCurrencyByCode(currencyCode);
+    if (currency == null) return '';
+    return currency.getRelativeRateString(_selectedCurrency);
+  }
+
+  // Get all currency comparisons
+  List<String> getAllCurrencyComparisons() {
+    return availableCurrencies
+        .where((currency) => currency.code != _selectedCurrency.code)
+        .map((currency) => currency.getRelativeRateString(_selectedCurrency))
+        .toList();
   }
 }

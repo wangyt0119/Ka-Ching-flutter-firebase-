@@ -28,6 +28,12 @@ dependencies:
   fl_chart: ^0.65.0
   firebase_storage: 12.4.5
   path: ^1.8.3
+  cross_file: ^0.3.3+4
+  # Add these dependencies for PDF generation and sharing
+  pdf: ^3.10.4
+  path_provider: ^2.1.1
+  open_file: ^3.3.2
+  share_plus: ^7.1.0
   
 dev_dependencies:
   flutter_test:

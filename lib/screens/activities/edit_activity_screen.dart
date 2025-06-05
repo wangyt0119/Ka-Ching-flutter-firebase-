@@ -73,21 +73,42 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
           .collection('activities')
           .doc(widget.activityData['activity_id']);
 
+      // First, delete all transactions in this activity
+      final transactionsSnapshot = await activityRef
+          .collection('transactions')
+          .get();
+
+      // Delete transactions in batches to avoid timeout
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in transactionsSnapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Commit the batch deletion of transactions
+      if (transactionsSnapshot.docs.isNotEmpty) {
+        await batch.commit();
+      }
+
+      // Then delete the activity document itself
       await activityRef.delete();
 
       // Navigate to UserHome directly (replace below with your actual UserHome route)
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const UserHomePage()),
-        (Route<dynamic> route) => false,
-      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const UserHomePage()),
+          (Route<dynamic> route) => false,
+        );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Activity deleted successfully')),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity and all transactions deleted successfully')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting activity: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting activity: $e')),
+        );
+      }
     }
   }
 }
@@ -183,14 +204,18 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
           'members': members,
         });
 
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity updated successfully')),
-        );
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Activity updated successfully')),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating activity: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating activity: $e')),
+          );
+        }
       }
     }
   }

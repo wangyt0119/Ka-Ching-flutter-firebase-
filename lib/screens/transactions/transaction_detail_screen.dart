@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../../theme/app_theme.dart';
 import 'edit_expense_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/currency_provider.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final String transactionId;
   final String? activityId;
+  final String? ownerId;
 
   const TransactionDetailScreen({
     super.key, 
     required this.transactionId, 
     this.activityId,
+    this.ownerId,
   });
 
   @override
@@ -36,15 +41,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<void> _loadTransactionData() async {
     try {
+      setState(() {
+        _isLoading = true;
+      });
+
       final user = _auth.currentUser;
       if (user != null) {
         DocumentSnapshot? transactionDoc;
-        
+        String ownerId = widget.ownerId ?? user.uid;
         // If we have an activity ID, fetch from activity's transactions
         if (widget.activityId != null) {
           transactionDoc = await _firestore
               .collection('users')
-              .doc(user.uid)
+              .doc(ownerId)
               .collection('activities')
               .doc(widget.activityId)
               .collection('transactions')
@@ -54,7 +63,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           // Also fetch activity details
           final activityDoc = await _firestore
               .collection('users')
-              .doc(user.uid)
+              .doc(ownerId)
               .collection('activities')
               .doc(widget.activityId)
               .get();
@@ -82,11 +91,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           List<Map<String, dynamic>> processedParticipants = [];
           
           for (String participantId in participantsList) {
-            double? share;
+            double share = 0.0;
+            
             if (data['split'] == 'equally') {
+              // For equal split
               share = (data['amount'] ?? 0) / participantsList.length;
+            } else if (data['split'] == 'unequally' && data['shares'] != null) {
+              // For unequal split
+              final shares = Map<String, dynamic>.from(data['shares']);
+              share = shares[participantId]?.toDouble() ?? 0.0;
             } else if (data['split'] == 'percentage' && data['shares'] != null) {
-              final percentage = data['shares'][participantId] ?? 0;
+              // For percentage split
+              final shares = Map<String, dynamic>.from(data['shares']);
+              final percentage = shares[participantId]?.toDouble() ?? 0.0;
               share = (data['amount'] ?? 0) * percentage / 100;
             }
             
@@ -122,30 +139,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<void> _deleteTransaction() async {
     try {
-      final user = _auth.currentUser;
-      if (user != null && _transaction != null) {
-        if (widget.activityId != null) {
-          await _firestore
-              .collection('users')
-              .doc(user.uid)
-              .collection('activities')
-              .doc(widget.activityId)
-              .collection('transactions')
-              .doc(widget.transactionId)
-              .delete();
-        } else {
-          await _firestore
-              .collection('transactions')
-              .doc(widget.transactionId)
-              .delete();
-        }
-        
-        Navigator.pop(context, true); // Return true to indicate deletion
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final ownerId = widget.ownerId ?? user.uid;
+      final activityId = widget.activityId;
+      final transactionId = widget.transactionId;
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(ownerId)
+          .collection('activities')
+          .doc(activityId)
+          .collection('transactions')
+          .doc(transactionId)
+          .delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaction deleted successfully')),
+        );
+        Navigator.pop(context, true); // Pop and signal deletion
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting transaction: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting transaction: $e')),
+        );
+      }
     }
   }
 
@@ -180,48 +198,43 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid;
+    final userEmail = user?.email;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color(0xFFF5A9C1),
-        elevation: 0,
-        title: const Text(
-          'Transaction Details',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        backgroundColor: const Color(0xFFB19CD9),
+        foregroundColor: Colors.white,
+        title: const Text('Transaction Details'),
         actions: [
+          if (_transaction != null)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _editTransaction,
+            ),
           IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
-            onPressed: () {
-              _editTransaction();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.white),
-            onPressed: () {
-              showDialog(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Delete Transaction'),
                   content: const Text('Are you sure you want to delete this transaction?'),
                   actions: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(context, false),
                       child: const Text('Cancel'),
                     ),
                     TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _deleteTransaction();
-                      },
+                      onPressed: () => Navigator.pop(context, true),
                       child: const Text('Delete', style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
               );
+              if (confirm == true) {
+                await _deleteTransaction();
+              }
             },
           ),
         ],
@@ -248,54 +261,65 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      _transaction!['title'] ?? 'Untitled',
-                                      style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  Text(
+                                    _transaction!['title'] ?? 'Untitled',
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Text(
-                                    '\$${(_transaction!['amount'] ?? 0.0).toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryColor,
-                                    ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // Original value
+                                      Text(
+                                        () {
+                                          final originalAmount = _transaction!['amount'] ?? 0.0;
+                                          final originalCurrency = _transaction!['currency'] ?? 'USD';
+                                          return '$originalCurrency ${originalAmount.toStringAsFixed(2)}';
+                                        }(),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      // Converted value
+                                      Text(
+                                        () {
+                                          final currencyProvider = Provider.of<CurrencyProvider>(context);
+                                          final originalAmount = _transaction!['amount'] ?? 0.0;
+                                          final originalCurrency = _transaction!['currency'] ?? 'USD';
+                                          final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+                                            (c) => c.code == originalCurrency,
+                                            orElse: () => currencyProvider.selectedCurrency,
+                                          );
+                                          final converted = currencyProvider.convertToSelectedCurrency(originalAmount.toDouble(), fromCurrency);
+                                          return currencyProvider.formatAmount(converted);
+                                        }(),
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFF5A9C1),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              if (_activity != null)
-                                Chip(
-                                  backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                                  label: Text(
-                                    _activity!['name'] ?? 'Unknown Activity',
-                                    style: TextStyle(color: AppTheme.primaryColor),
-                                  ),
-                                ),
                               const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  const Icon(Icons.calendar_today, size: 16, color: AppTheme.textSecondary),
+                                  const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    _transaction!['date'] ?? 'Unknown date',
-                                    style: const TextStyle(color: AppTheme.textSecondary),
-                                  ),
+                                  Text(_transaction!['date'] ?? 'Unknown date'),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.person, size: 16, color: AppTheme.textSecondary),
+                                  const Icon(Icons.person, size: 16, color: Colors.grey),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Paid by ${_transaction!['paid_by'] ?? 'Unknown'}',
-                                    style: const TextStyle(color: AppTheme.textSecondary),
-                                  ),
+                                  Text('Paid by ${_transaction!['paid_by'] ?? 'Unknown'}'),
                                 ],
                               ),
                               if (_transaction!['description'] != null && _transaction!['description'].toString().isNotEmpty)
@@ -316,6 +340,58 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     ],
                                   ),
                                 ),
+                              const SizedBox(height: 16),
+                              // Show user's share
+                              Builder(
+                                builder: (context) {
+                                  final participants = List<String>.from(_transaction!['participants'] ?? []);
+                                  String userKey = '';
+                                  if (participants.contains(userId)) {
+                                    userKey = userId!;
+                                  } else if (participants.contains(userEmail)) {
+                                    userKey = userEmail!;
+                                  }
+                                  double userShare = 0.0;
+                                  if (userKey.isNotEmpty) {
+                                    if (_transaction!['split'] == 'equally') {
+                                      userShare = (_transaction!['amount'] ?? 0.0) / participants.length;
+                                    } else if (_transaction!['split'] == 'unequally' && _transaction!['shares'] != null) {
+                                      final shares = Map<String, dynamic>.from(_transaction!['shares']);
+                                      userShare = shares[userKey]?.toDouble() ?? 0.0;
+                                    } else if (_transaction!['split'] == 'percentage' && _transaction!['shares'] != null) {
+                                      final shares = Map<String, dynamic>.from(_transaction!['shares']);
+                                      final percentage = shares[userKey]?.toDouble() ?? 0.0;
+                                      userShare = (_transaction!['amount'] ?? 0.0) * percentage / 100;
+                                    }
+                                  }
+                                  final paidBy = _transaction!['paid_by'];
+                                  final isPayer = paidBy == userKey;
+                                  final currencyProvider = Provider.of<CurrencyProvider>(context);
+                                  final originalCurrency = _transaction!['currency'] ?? 'USD';
+                                  final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+                                    (c) => c.code == originalCurrency,
+                                    orElse: () => currencyProvider.selectedCurrency,
+                                  );
+                                  final convertedShare = currencyProvider.convertToSelectedCurrency(userShare, fromCurrency);
+                                  if (userKey.isEmpty) return const SizedBox();
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        isPayer ? 'You paid' : (userShare > 0 ? 'You get back' : 'You owe'),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      Text(
+                                        currencyProvider.formatAmount(convertedShare.abs()),
+                                        style: TextStyle(
+                                          color: userShare >= 0 ? Colors.green : Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -332,44 +408,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Split ${_transaction!['split'] == 'equally' ? 'equally' : 'by percentage'}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              ..._participants.map((participant) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(participant['name']),
-                                      Text(
-                                        '\$${(participant['share'] ?? 0.0).toStringAsFixed(2)}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ],
-                          ),
-                        ),
-                      ),
+                      _buildSplitDetailsCard(),
                       
                       // Receipt image if available
-                      if (_transaction!['receipt_url'] != null)
+                      if (_transaction!['receipt_image'] != null)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -387,25 +429,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Image.network(
-                                  _transaction!['receipt_url'],
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / 
-                                                loadingProgress.expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Text('Failed to load receipt image'),
-                                    );
-                                  },
+                                padding: const EdgeInsets.all(16),
+                                child: Image.memory(
+                                  base64Decode(_transaction!['receipt_image']),
+                                  fit: BoxFit.cover,
                                 ),
                               ),
                             ),
@@ -416,8 +443,124 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ),
     );
   }
+
+  // Helper method to get the split method text
+  String _getSplitMethodText() {
+    final splitMethod = _transaction?['split'] ?? 'equally';
+    
+    switch (splitMethod) {
+      case 'equally':
+        return 'Split equally';
+      case 'unequally':
+        return 'Split unequally';
+      case 'percentage':
+        return 'Split by percentage';
+      default:
+        return 'Split equally';
+    }
+  }
+
+  // Fix the transaction detail screen to properly display split information
+  Widget _buildSplitDetailsCard() {
+    if (_transaction == null || _participants.isEmpty) {
+      return const SizedBox();
+    }
+    
+    final splitMethod = _transaction!['split'] ?? 'equally';
+    String splitMethodText;
+    
+    switch (splitMethod) {
+      case 'equally':
+        splitMethodText = 'Split equally';
+        break;
+      case 'unequally':
+        splitMethodText = 'Split unequally';
+        break;
+      case 'percentage':
+        splitMethodText = 'Split by percentage';
+        break;
+      default:
+        splitMethodText = 'Split equally';
+    }
+    
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              splitMethodText,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Show participant shares
+            ..._participants.map((participant) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(participant['name']),
+                    Text(
+                      () {
+                        final currencyProvider = Provider.of<CurrencyProvider>(context);
+                        final originalAmount = participant['share'] ?? 0.0;
+                        final originalCurrency = _transaction!['currency'] ?? 'USD';
+                        final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+                          (c) => c.code == originalCurrency,
+                          orElse: () => currencyProvider.selectedCurrency,
+                        );
+                        final converted = currencyProvider.convertToSelectedCurrency(originalAmount.toDouble(), fromCurrency);
+                        return currencyProvider.formatAmount(converted);
+                      }(),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            
+            // Show percentages if split by percentage
+            if (splitMethod == 'percentage' && _transaction!['shares'] != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(),
+                  const Text(
+                    'Percentage Breakdown:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._participants.map((participant) {
+                    final shares = Map<String, dynamic>.from(_transaction!['shares']);
+                    final percentage = shares[participant['name']]?.toDouble() ?? 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(participant['name']),
+                          Text(
+                            '${percentage.toStringAsFixed(1)}%',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
-
-
-
-

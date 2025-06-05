@@ -8,6 +8,10 @@ import '../profile/profile_screen.dart';
 import '../activities/activity_detail_screen.dart';
 import '../friends/friends_screen.dart';
 import '../transactions/transactions_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/currency_provider.dart';
+import '../../services/currency_service.dart';
+import '../../models/currency.dart';
 
 class UserHomePage extends StatefulWidget {
   const UserHomePage({super.key});
@@ -22,6 +26,8 @@ class _UserHomePageState extends State<UserHomePage> {
   double youAreOwed = 0;
   double totalBalance = 0;
   List<Map<String, dynamic>> activities = [];
+  String selectedCurrencyCode = 'USD';
+  Currency? selectedCurrency;
 
   int _selectedIndex = 0;
   final List<Widget> _screens = [];
@@ -30,40 +36,234 @@ class _UserHomePageState extends State<UserHomePage> {
   void initState() {
     super.initState();
     _loadUserData();
+    _loadCurrency();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Listen to currency changes and reload user data
+    Provider.of<CurrencyProvider>(context).addListener(_onCurrencyChanged);
+  }
+
+  @override
+  void dispose() {
+    Provider.of<CurrencyProvider>(context, listen: false).removeListener(_onCurrencyChanged);
+    super.dispose();
+  }
+
+  void _onCurrencyChanged() {
+    _loadUserData();
+  }
+
+  Future<void> _loadCurrency() async {
+    final currencyService = CurrencyService();
+    final currency = await currencyService.getSelectedCurrency();
+    setState(() {
+      selectedCurrencyCode = currency.code;
+      selectedCurrency = currency;
+    });
   }
 
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final data = doc.data();
+      final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+      final selectedCurrency = currencyProvider.selectedCurrency;
+      double totalOwed = 0.0;
+      double totalOwing = 0.0;
+      final createdActivitiesSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('activities')
+          .orderBy('createdAt', descending: true)
+          .get();
+      final loadedActivities = createdActivitiesSnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        data['isCreator'] = true;
+        data['ownerId'] = user.uid;
+        return data;
+      }).toList();
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+      for (var userDoc in usersSnapshot.docs) {
+        if (userDoc.id == user.uid) continue;
+        final activitiesSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('activities')
+            .get();
+        for (var activityDoc in activitiesSnapshot.docs) {
+          final activityData = activityDoc.data();
+          final members = activityData['members'] as List<dynamic>? ?? [];
+          bool isParticipant = false;
+          for (var member in members) {
+            if (member is Map<String, dynamic> && 
+                (member['id'] == user.uid || 
+                 member['email'] == user.email)) {
+              isParticipant = true;
+              break;
+            }
+          }
+          if (isParticipant) {
+            activityData['id'] = activityDoc.id;
+            activityData['isCreator'] = false;
+            activityData['ownerId'] = userDoc.id;
+            loadedActivities.add(activityData);
+          }
+        }
+      }
+      // For each activity, recalculate the user's balance in the selected currency
+      for (var activity in loadedActivities) {
+        final activityId = activity['id'];
+        final ownerId = activity['ownerId'];
+        final activityMembers = activity['members'] as List<dynamic>? ?? [];
+        Map<String, double> balances = {};
 
-      final activitySnapshot =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('activities')
-              .orderBy('createdAt', descending: true)
-              .get();
+        // Initialize balances for all members using their actual IDs
+        for (var member in activityMembers) {
+          final id = member is Map ? (member['id'] ?? member['email'] ?? member['name']) : member;
+          balances[id] = 0.0;
+        }
 
-      final loadedActivities =
-          activitySnapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return data;
-          }).toList();
+        // Also initialize balance for "You" key (for backward compatibility)
+        balances['You'] = 0.0;
 
+        // Fetch all transactions for this activity
+        final transactionsSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(ownerId)
+            .collection('activities')
+            .doc(activityId)
+            .collection('transactions')
+            .get();
+        final transactions = transactionsSnapshot.docs.map((doc) => doc.data()).toList();
+
+        for (var transaction in transactions) {
+          final paidBy = transaction['paid_by'] ?? '';
+          final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+          final originalCurrency = transaction['currency'] ?? 'USD';
+          final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+            (c) => c.code == originalCurrency,
+            orElse: () => selectedCurrency,
+          );
+          final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
+          final split = transaction['split'] ?? 'equally';
+          final participants = List<String>.from(transaction['participants'] ?? []);
+
+          // Handle settlement transactions
+          if (transaction['is_settlement'] == true) {
+            final settlementFrom = transaction['settlement_from'] ?? '';
+            final settlementTo = transaction['settlement_to'] ?? '';
+            final settlementAmount = amount;
+
+            // Apply settlement: reduce debt between parties
+            // When someone pays to settle debt, their balance increases (less negative or more positive)
+            // and the receiver's balance decreases (less positive or more negative)
+            if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+              // Handle both old format ("You") and new format (user ID)
+              String actualSettlementFrom = settlementFrom;
+              String actualSettlementTo = settlementTo;
+
+              // Convert "You" to actual user ID for consistency
+              if (settlementFrom == 'You') {
+                actualSettlementFrom = user.uid;
+              }
+              if (settlementTo == 'You') {
+                actualSettlementTo = user.uid;
+              }
+
+              balances[actualSettlementFrom] = (balances[actualSettlementFrom] ?? 0.0) + settlementAmount;
+              balances[actualSettlementTo] = (balances[actualSettlementTo] ?? 0.0) - settlementAmount;
+            }
+            continue;
+          }
+
+          if (split == 'equally' && participants.isNotEmpty) {
+            final sharePerPerson = amount / participants.length;
+            balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+            for (var participant in participants) {
+              balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
+            }
+            balances[paidBy] = (balances[paidBy] ?? 0.0) - sharePerPerson;
+          } else if (split == 'unequally' && transaction['shares'] != null) {
+            final shares = Map<String, dynamic>.from(transaction['shares']);
+            balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+            for (var participant in participants) {
+              final shareOriginal = shares[participant]?.toDouble() ?? 0.0;
+              final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+              balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+            }
+            final payerShareOriginal = shares[paidBy]?.toDouble() ?? 0.0;
+            final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+            balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+          } else if (split == 'percentage' && transaction['shares'] != null) {
+            final shares = Map<String, dynamic>.from(transaction['shares']);
+            balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
+            for (var participant in participants) {
+              final percentage = shares[participant]?.toDouble() ?? 0.0;
+              final shareOriginal = originalAmount * percentage / 100;
+              final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
+              balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
+            }
+            final payerPercentage = shares[paidBy]?.toDouble() ?? 0.0;
+            final payerShareOriginal = originalAmount * payerPercentage / 100;
+            final payerShareConverted = currencyProvider.convertToSelectedCurrency(payerShareOriginal, fromCurrency);
+            balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
+          }
+        }
+
+        // Find user's balance using multiple possible keys
+        String userKey = '';
+        double userBalance = 0.0;
+
+        // Try different ways to identify the current user
+        if (balances.containsKey('You')) {
+          userKey = 'You';
+          userBalance = balances['You'] ?? 0.0;
+        } else if (balances.containsKey(user.uid)) {
+          userKey = user.uid;
+          userBalance = balances[userKey] ?? 0.0;
+        } else if (balances.containsKey(user.email)) {
+          userKey = user.email ?? '';
+          userBalance = balances[userKey] ?? 0.0;
+        } else {
+          // Try to find by matching member data
+          for (var member in activityMembers) {
+            if (member is Map<String, dynamic>) {
+              if (member['id'] == user.uid || member['email'] == user.email) {
+                final memberKey = member['id'] ?? member['email'] ?? member['name'];
+                if (balances.containsKey(memberKey)) {
+                  userKey = memberKey;
+                  userBalance = balances[memberKey] ?? 0.0;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (userBalance > 0) {
+          // Positive balance means user is owed money
+          totalOwed += userBalance;
+        } else if (userBalance < 0) {
+          // Negative balance means user owes money
+          totalOwing += userBalance.abs();
+        }
+      }
       setState(() {
         fullName = data?['full_name'] ?? 'User';
-        youOwe = data?['you_owe']?.toDouble() ?? 0.0;
-        youAreOwed = data?['you_are_owed']?.toDouble() ?? 0.0;
+        youOwe = totalOwing;
+        youAreOwed = totalOwed;
         totalBalance = youAreOwed - youOwe;
         activities = loadedActivities.cast<Map<String, dynamic>>();
-
         _screens.clear();
         _screens.addAll([
           _buildHomeBody(),
@@ -72,7 +272,13 @@ class _UserHomePageState extends State<UserHomePage> {
           const ProfileScreen(),
         ]);
       });
+      _loadCurrency();
     }
+  }
+
+  String _formatAmount(double amount) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+    return currencyProvider.formatAmount(amount);
   }
 
   Widget _buildHomeBody() {
@@ -109,7 +315,7 @@ class _UserHomePageState extends State<UserHomePage> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () {},
+                        onPressed: _showCurrencyDialog,
                         style: TextButton.styleFrom(padding: EdgeInsets.zero),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -128,7 +334,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                 size: 16,
                               ),
                               SizedBox(width: 4),
-                              Text("USD", style: TextStyle(color: Colors.grey)),
+                              Text(selectedCurrencyCode, style: TextStyle(color: Colors.grey)),
                             ],
                           ),
                         ),
@@ -150,7 +356,7 @@ class _UserHomePageState extends State<UserHomePage> {
                               ),
                             ),
                             Text(
-                              "\$${youOwe.toStringAsFixed(2)}",
+                              _formatAmount(youOwe),
                               style: const TextStyle(
                                 color: Colors.red,
                                 fontSize: 18,
@@ -177,7 +383,7 @@ class _UserHomePageState extends State<UserHomePage> {
                               ),
                             ),
                             Text(
-                              "\$${youAreOwed.toStringAsFixed(2)}",
+                              _formatAmount(youAreOwed),
                               style: const TextStyle(
                                 color: Colors.green,
                                 fontSize: 18,
@@ -204,7 +410,7 @@ class _UserHomePageState extends State<UserHomePage> {
                         ),
                       ),
                       Text(
-                        "\$${totalBalance.toStringAsFixed(2)}",
+                        _formatAmount(totalBalance),
                         style: TextStyle(
                           color: totalBalance >= 0 ? Colors.green : Colors.red,
                           fontWeight: FontWeight.bold,
@@ -220,7 +426,7 @@ class _UserHomePageState extends State<UserHomePage> {
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 35),
                     ),
-                    onPressed: () {},
+                    onPressed: _showSettleUpDialog,
                     child: const Text("Settle Up"),
                   ),
                 ],
@@ -255,6 +461,7 @@ class _UserHomePageState extends State<UserHomePage> {
           const SizedBox(height: 12),
 
           ...activities.map((activity) {
+            final user = FirebaseAuth.instance.currentUser;
             final title = activity['name'] ?? 'Untitled';
             final createdAt =
                 (activity['createdAt'] as Timestamp?)
@@ -263,13 +470,45 @@ class _UserHomePageState extends State<UserHomePage> {
                     .toString()
                     .split(' ')[0] ??
                 '';
-            final total = activity['total']?.toDouble() ?? 0.0;
-            final status = activity['status'] ?? '';
-            final amount = activity['amount']?.toDouble() ?? 0.0;
+            // The stored totalAmount is in USD base currency, convert to display currency
+            final totalInUSD = activity['totalAmount']?.toDouble() ?? 0.0;
+            final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+            final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
+              (c) => c.code == 'USD',
+              orElse: () => currencyProvider.selectedCurrency,
+            );
+            final total = currencyProvider.convertCurrency(totalInUSD, baseCurrencyObj, currencyProvider.selectedCurrency);
+            final balances = Map<String, dynamic>.from(activity['balances'] ?? {});
+
+            // Find user balance using multiple possible keys
+            double userBalance = 0.0;
+            if (balances.containsKey('You')) {
+              userBalance = balances['You']?.toDouble() ?? 0.0;
+            } else if (user != null && balances.containsKey(user.uid)) {
+              userBalance = balances[user.uid]?.toDouble() ?? 0.0;
+            } else if (user != null && balances.containsKey(user.email)) {
+              userBalance = balances[user.email]?.toDouble() ?? 0.0;
+            } else if (user != null) {
+              // Try to find by matching member data
+              final activityMembers = activity['members'] as List<dynamic>? ?? [];
+              for (var member in activityMembers) {
+                if (member is Map<String, dynamic>) {
+                  if (member['id'] == user.uid || member['email'] == user.email) {
+                    final memberKey = member['id'] ?? member['email'] ?? member['name'];
+                    if (balances.containsKey(memberKey)) {
+                      userBalance = balances[memberKey]?.toDouble() ?? 0.0;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
             final members =
                 activity['members'] != null
                     ? (activity['members'] as List).length
                     : 1;
+            final status = userBalance < 0 ? 'owe' : 'get_back';
+            final amount = userBalance.abs();
 
             return Card(
               shape: RoundedRectangleBorder(
@@ -290,12 +529,12 @@ class _UserHomePageState extends State<UserHomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder:
-                                (_) => ActivityDetailsScreen(
-                                  activityId: activity['id'],
-                                ),
+                            builder: (_) => ActivityDetailsScreen(
+                              activityId: activity['id'],
+                              ownerId: activity['isCreator'] ? null : activity['ownerId'],
+                            ),
                           ),
-                        );
+                        ).then((_) => _loadUserData()); // Reload data when returning
                       },
                       leading: Container(
                         width: 40,
@@ -327,7 +566,7 @@ class _UserHomePageState extends State<UserHomePage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            "\$${total.toStringAsFixed(2)}",
+                            _formatAmount(total),
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -371,7 +610,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                "You owe \$${amount.toStringAsFixed(2)}",
+                                "You owe ${_formatAmount(amount)}",
                                 style: TextStyle(
                                   color:
                                       Theme.of(context).colorScheme.secondary,
@@ -390,7 +629,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                "You get back \$${amount.toStringAsFixed(2)}",
+                                "You get back ${_formatAmount(amount)}",
                                 style: TextStyle(
                                   color:
                                       Theme.of(context).colorScheme.secondary,
@@ -409,6 +648,265 @@ class _UserHomePageState extends State<UserHomePage> {
         ],
       ),
     );
+  }
+
+  void _showCurrencyDialog() async {
+    final currencyService = CurrencyService();
+    final currencies = currencyService.getAllCurrencies();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Currency'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: currencies.length,
+            itemBuilder: (context, index) {
+              final currency = currencies[index];
+              return ListTile(
+                title: Text('${currency.name} (${currency.code})'),
+                trailing: currency.code == selectedCurrencyCode
+                    ? const Icon(Icons.check, color: Color(0xFFF5A9C1))
+                    : null,
+                onTap: () async {
+                  await currencyService.setSelectedCurrency(currency);
+                  setState(() {
+                    selectedCurrencyCode = currency.code;
+                    selectedCurrency = currency;
+                  });
+                  _loadUserData();
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSettleUpDialog() async {
+    // Step 1: Select activity
+    if (activities.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No activities to settle.')),
+        );
+      }
+      return;
+    }
+    String? selectedActivityId;
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Activity'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: activities.length,
+              itemBuilder: (context, index) {
+                final activity = activities[index];
+                return ListTile(
+                  title: Text(activity['name'] ?? 'Untitled'),
+                  onTap: () {
+                    selectedActivityId = activity['id'];
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+    if (selectedActivityId == null) return;
+    final selectedActivity = activities.firstWhere((a) => a['id'] == selectedActivityId);
+    final balances = Map<String, dynamic>.from(selectedActivity['balances'] ?? {});
+    // Step 2: Select user to settle with
+    List<String> otherUsers = balances.keys.where((k) => k != 'You' && (balances[k] as num).abs() > 0).toList();
+    if (otherUsers.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No one to settle with in this activity.')),
+        );
+      }
+      return;
+    }
+    String? selectedUser;
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+        title: const Text('Select User to Settle With'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: otherUsers.length,
+            itemBuilder: (context, index) {
+              final user = otherUsers[index];
+              final bal = balances[user]?.toDouble() ?? 0.0;
+              final displayText = bal > 0
+                  ? 'You owe $user ${_formatAmount(bal.abs())}'
+                  : '$user owes you ${_formatAmount(bal.abs())}';
+              return ListTile(
+                title: Text(user),
+                subtitle: Text(displayText),
+                onTap: () {
+                  selectedUser = user;
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    }
+    if (selectedUser == null) return;
+    final userBalance = balances[selectedUser]?.toDouble() ?? 0.0;
+    final isPositive = userBalance > 0;
+    final maxAmount = userBalance.abs();
+    final TextEditingController amountController = TextEditingController(
+      text: maxAmount.toStringAsFixed(2),
+    );
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+        title: const Text('Enter Settlement Amount'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPositive
+                  ? 'You owe $selectedUser ${_formatAmount(maxAmount)}'
+                  : '$selectedUser owes you ${_formatAmount(maxAmount)}',
+            ),
+            const SizedBox(height: 16),
+            const Text('How much would you like to settle?'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                prefixText: selectedCurrency?.symbol ?? ' 24',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enter an amount between 0 and ${_formatAmount(maxAmount)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text) ?? 0.0;
+              if (amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a positive amount')),
+                );
+                return;
+              }
+              if (amount > maxAmount) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Amount cannot exceed ${_formatAmount(maxAmount)}')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _createSettlementTransaction(selectedActivity, selectedUser!, isPositive ? amount : -amount);
+            },
+            child: const Text('Settle'),
+          ),
+        ],
+      ),
+    );
+    }
+  }
+
+  Future<void> _createSettlementTransaction(Map<String, dynamic> activity, String person, double balance) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final activityId = activity['id'];
+        final ownerId = activity['isCreator'] ? user.uid : activity['ownerId'];
+        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+
+        // Get the activity's original currency
+        final activityCurrency = activity['currency'] ?? 'USD';
+        final activityCurrencyObj = currencyProvider.getCurrencyByCode(activityCurrency) ??
+                                   currencyProvider.selectedCurrency;
+
+        // Convert the settlement amount to the activity's currency
+        final settlementAmountInActivityCurrency = currencyProvider.convertCurrency(
+          balance.abs(),
+          currencyProvider.selectedCurrency,
+          activityCurrencyObj
+        );
+
+        // Create a settlement transaction in the selected activity
+        final isPositive = balance >= 0;
+
+        // Use the actual user ID instead of "You" for consistency with balance calculations
+        final currentUserKey = user.uid;
+
+        final settlement = {
+          'title': isPositive ? 'You settled debt with $person' : '$person settled debt with you',
+          'amount': settlementAmountInActivityCurrency,
+          'currency': activityCurrency,
+          'date': DateTime.now().toString().split(' ')[0],
+          'description': 'Settlement transaction',
+          'paid_by': isPositive ? currentUserKey : person,
+          'split': 'settlement', // Use a special split type for settlements
+          'participants': [person], // Only the other person participates in settlement
+          'settlement_amount': settlementAmountInActivityCurrency,
+          'settlement_from': isPositive ? currentUserKey : person,
+          'settlement_to': isPositive ? person : currentUserKey,
+          'is_settlement': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        };
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(ownerId)
+            .collection('activities')
+            .doc(activityId)
+            .collection('transactions')
+            .add(settlement);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Settlement recorded successfully'),
+            ),
+          );
+        }
+        _loadUserData();
+      }
+    } catch (e) {
+      debugPrint('Error creating settlement: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating settlement: $e'),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -442,30 +940,54 @@ class _UserHomePageState extends State<UserHomePage> {
       floatingActionButton:
           _selectedIndex == 0
               ? FloatingActionButton(
-                backgroundColor: const Color.fromARGB(255, 237, 71, 137),
-                onPressed: () {
-                  if (activities.isNotEmpty) {
-                    final firstActivity = activities.first;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (_) => AddExpenseScreen(
-                              activityId: firstActivity['id'],
-                              activityName: firstActivity['name'] ?? 'Untitled',
+                  backgroundColor: const Color.fromARGB(255, 237, 71, 137),
+                  onPressed: () {
+                    if (activities.isNotEmpty) {
+                      // Show a dialog to select which activity to add expense to
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          return AlertDialog(
+                            title: const Text('Select Activity'),
+                            content: SizedBox(
+                              width: double.maxFinite,
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: activities.length,
+                                itemBuilder: (context, index) {
+                                  final activity = activities[index];
+                                  return ListTile(
+                                    title: Text(activity['name'] ?? 'Untitled'),
+                                    onTap: () {
+                                      Navigator.pop(context); // Close dialog
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => AddExpenseScreen(
+                                            activityId: activity['id'],
+                                            activityName: activity['name'] ?? 'Untitled',
+                                            ownerId: activity['isCreator'] ? null : activity['ownerId'],
+                                          ),
+                                        ),
+                                      ).then((_) => _loadUserData());
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please create an activity first.'),
-                      ),
-                    );
-                  }
-                },
-                child: const Icon(Icons.add),
-              )
+                          );
+                        },
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please create an activity first.'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Icon(Icons.add),
+                )
               : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,

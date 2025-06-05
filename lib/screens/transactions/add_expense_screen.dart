@@ -10,12 +10,15 @@ import '../../services/currency_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String activityId;
-  final String activityName;
+  final String? activityName;
+  final String? ownerId;
 
+  // Constructor that accepts both old and new parameter formats
   const AddExpenseScreen({
-    super.key,
+    super.key, 
     required this.activityId,
-    required this.activityName,
+    this.activityName,
+    this.ownerId,
   });
 
   @override
@@ -46,6 +49,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   List<String> allParticipants = [];
   Map<String, bool> selectedParticipants = {};
 
+  Map<String, double> customShares = {};
+  Map<String, TextEditingController> shareControllers = {};
+
   @override
   void initState() {
     super.initState();
@@ -61,20 +67,46 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         .collection('activities')
         .get();
 
-    final activities = snapshot.docs.map((doc) {
+    final activities = await Future.wait(snapshot.docs.map((doc) async {
+      // Get the activity data
+      final activityData = doc.data();
+      
+      // Get the latest friends list
+      final friendsSnapshot = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('friends')
+          .get();
+          
+      final friends = friendsSnapshot.docs.map((friendDoc) {
+        return friendDoc.data()['name'] as String;
+      }).toList();
+      
+      // Return the activity with updated friends list
       return {
         'id': doc.id,
-        'name': doc.data()['name'] ?? 'Unnamed Activity',
-        'friends': List<String>.from(doc.data()['friends'] ?? []),
+        'name': activityData['name'] ?? 'Unnamed Activity',
+        'friends': friends,
       };
-    }).toList();
+    }).toList());
 
     setState(() {
       userActivities = activities;
       if (activities.isNotEmpty) {
-        selectedActivityId = activities[0]['id'];
-        selectedActivityName = activities[0]['name'];
-        _setParticipants(activities[0]['friends']);
+        // If activityId was provided, select that activity
+        if (widget.activityId.isNotEmpty) {
+          final selectedActivity = activities.firstWhere(
+            (activity) => activity['id'] == widget.activityId,
+            orElse: () => activities[0],
+          );
+          selectedActivityId = selectedActivity['id'];
+          selectedActivityName = selectedActivity['name'];
+          _setParticipants(selectedActivity['friends']);
+        } else {
+          selectedActivityId = activities[0]['id'];
+          selectedActivityName = activities[0]['name'];
+          _setParticipants(activities[0]['friends']);
+        }
       }
     });
   }
@@ -152,8 +184,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final members = ['You', ...friends];
     setState(() {
       allParticipants = members;
-      selectedParticipants = {for (var name in members) name: name == 'You'};
+      selectedParticipants = {for (var name in members) name: true};
       paidBy = 'You';
+      
+      // Initialize share controllers for all participants
+      for (var participant in members) {
+        if (!shareControllers.containsKey(participant)) {
+          shareControllers[participant] = TextEditingController();
+        }
+      }
+      
+      // Reset custom shares
+      customShares = {};
+      for (var participant in members) {
+        customShares[participant] = 0.0;
+        if (shareControllers.containsKey(participant)) {
+          shareControllers[participant]!.text = '';
+        }
+      }
     });
   }
 
@@ -174,7 +222,31 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     if (!_formKey.currentState!.validate() || selectedActivityId == null)
       return;
 
+    // Validate split amounts match total for unequal and percentage splits
+    if (splitMethod == 'unequally') {
+      final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
+      final totalShares = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+      
+      if ((totalAmount - totalShares).abs() > 0.01) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
+        );
+        return;
+      }
+    } else if (splitMethod == 'percentage') {
+      final totalPercentage = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+      
+      if ((totalPercentage - 100.0).abs() > 0.1) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
+        );
+        return;
+      }
+    }
+
     final user = _auth.currentUser!;
+    final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
+    final ownerId = selectedActivity['ownerId'] ?? user.uid;
     final expense = {
       'title': _titleController.text.trim(),
       'amount': double.tryParse(_amountController.text.trim()) ?? 0,
@@ -188,16 +260,52 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           .map((entry) => entry.key)
           .toList(),
       if (_base64Image != null) 'receipt_image': _base64Image, 
-
+      'timestamp': FieldValue.serverTimestamp(),
     };
+
+    // Handle different split methods
+    if (splitMethod == 'unequally') {
+      // Create shares map for unequal split
+      final shares = <String, double>{};
+      final participants = selectedParticipants.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
+      
+      for (var participant in participants) {
+        shares[participant] = customShares[participant] ?? 0.0;
+      }
+      
+      expense['shares'] = shares;
+    } else if (splitMethod == 'percentage') {
+      // Create shares map for percentage split
+      final shares = <String, double>{};
+      final participants = selectedParticipants.entries
+          .where((entry) => entry.value)
+          .map((entry) => entry.key)
+          .toList();
+      
+      for (var participant in participants) {
+        shares[participant] = customShares[participant] ?? 0.0;
+      }
+      
+      expense['shares'] = shares;
+    }
 
     await _firestore
         .collection('users')
-        .doc(user.uid)
+        .doc(ownerId)
         .collection('activities')
         .doc(selectedActivityId)
         .collection('transactions')
         .add(expense);
+
+    // After submission, trigger balance recalculation
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Transaction added, recalculating balances...')),
+      );
+    }
 
     Navigator.pop(context);
   }
@@ -518,6 +626,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              // Add the split method UI
+              _buildSplitMethodUI(),
               const SizedBox(height: 24),
               const Text(
                 "Participants",
@@ -557,5 +668,230 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildSplitMethodUI() {
+    final activeParticipants = selectedParticipants.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+        
+    if (activeParticipants.isEmpty) {
+      return const Text('Please select participants first');
+    }
+    
+    if (splitMethod == 'equally') {
+      // For equally split, just show the participants
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Each person pays:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            double amount = 0.0;
+            try {
+              amount = _amountController.text.isEmpty 
+                  ? 0.0 
+                  : (double.parse(_amountController.text) / activeParticipants.length);
+            } catch (e) {
+              // Handle parsing error
+              print('Error parsing amount: $e');
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(name),
+                  Text('$selectedCurrency ${amount.toStringAsFixed(2)}'),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      );
+    } else if (splitMethod == 'unequally') {
+      // For unequal split, show text fields for each participant
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Enter amount for each person:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            // Make sure controller exists
+            if (!shareControllers.containsKey(name)) {
+              shareControllers[name] = TextEditingController();
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(name),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: shareControllers[name],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        prefixText: '$selectedCurrency ',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          customShares[name] = double.tryParse(value) ?? 0.0;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '$selectedCurrency ${customShares.values.fold(0.0, (sum, amount) => sum + amount).toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          if (_amountController.text.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Expense amount:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  '$selectedCurrency ${double.tryParse(_amountController.text)?.toStringAsFixed(2) ?? "0.00"}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          if (_amountController.text.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Difference:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  '$selectedCurrency ${((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: ((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).abs() < 0.01
+                        ? Colors.green
+                        : Colors.red,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    } else if (splitMethod == 'percentage') {
+      // For percentage split, show percentage fields for each participant
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text('Enter percentage for each person:'),
+          const SizedBox(height: 8),
+          ...activeParticipants.map((name) {
+            // Make sure controller exists
+            if (!shareControllers.containsKey(name)) {
+              shareControllers[name] = TextEditingController();
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(name),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: shareControllers[name],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        suffixText: '%',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          customShares[name] = double.tryParse(value) ?? 0.0;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total percentage:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '${customShares.values.fold(0.0, (sum, amount) => sum + amount).toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: (customShares.values.fold(0.0, (sum, amount) => sum + amount) - 100.0).abs() < 0.1
+                      ? Colors.green
+                      : Colors.red,
+                ),
+              ),
+            ],
+          ),
+          if (_amountController.text.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                const Text('Amount breakdown:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                ...activeParticipants.map((name) {
+                  final percentage = customShares[name] ?? 0.0;
+                  double amount = 0.0;
+                  try {
+                    amount = _amountController.text.isEmpty
+                        ? 0.0
+                        : (double.parse(_amountController.text) * percentage / 100);
+                  } catch (e) {
+                    // Handle parsing error
+                    print('Error parsing amount: $e');
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(name),
+                        Text('$selectedCurrency ${amount.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+        ],
+      );
+    }
+    
+    return const SizedBox();
   }
 }
