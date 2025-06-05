@@ -98,7 +98,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           // Load transactions for this activity
           final transactionsSnapshot = await activityRef
               .collection('transactions')
-              .orderBy('date', descending: true)
+              .orderBy('timestamp', descending: true)
               .get();
 
           final transactions = transactionsSnapshot.docs.map((doc) {
@@ -1442,7 +1442,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                     ownerId: widget.ownerId,
                                   ),
                                 ),
-                              );
+                              ).then((_) => _loadActivityData());
                             },
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('Add'),
@@ -1484,7 +1484,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 ownerId: widget.ownerId,
               ),
             ),
-          );
+          ).then((_) => _loadActivityData());
         },
         icon: const Icon(Icons.add),
         label: const Text('Add Expense'),

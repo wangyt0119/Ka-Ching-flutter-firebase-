@@ -37,7 +37,7 @@ class TransactionDetailsScreen extends StatelessWidget {
             .collection('activities')
             .doc(activity_id)
             .collection('transactions')
-            .orderBy('date', descending: true)
+            .orderBy('timestamp', descending: true)
             .snapshots(),
 
         builder: (context, snapshot) {
