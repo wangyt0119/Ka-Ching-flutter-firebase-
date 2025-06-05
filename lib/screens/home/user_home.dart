@@ -126,10 +126,16 @@ class _UserHomePageState extends State<UserHomePage> {
         final ownerId = activity['ownerId'];
         final activityMembers = activity['members'] as List<dynamic>? ?? [];
         Map<String, double> balances = {};
+
+        // Initialize balances for all members using their actual IDs
         for (var member in activityMembers) {
           final id = member is Map ? (member['id'] ?? member['email'] ?? member['name']) : member;
           balances[id] = 0.0;
         }
+
+        // Also initialize balance for "You" key (for backward compatibility)
+        balances['You'] = 0.0;
+
         // Fetch all transactions for this activity
         final transactionsSnapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -139,6 +145,7 @@ class _UserHomePageState extends State<UserHomePage> {
             .collection('transactions')
             .get();
         final transactions = transactionsSnapshot.docs.map((doc) => doc.data()).toList();
+
         for (var transaction in transactions) {
           final paidBy = transaction['paid_by'] ?? '';
           final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
@@ -150,9 +157,35 @@ class _UserHomePageState extends State<UserHomePage> {
           final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
           final split = transaction['split'] ?? 'equally';
           final participants = List<String>.from(transaction['participants'] ?? []);
+
+          // Handle settlement transactions
           if (transaction['is_settlement'] == true) {
+            final settlementFrom = transaction['settlement_from'] ?? '';
+            final settlementTo = transaction['settlement_to'] ?? '';
+            final settlementAmount = amount;
+
+            // Apply settlement: reduce debt between parties
+            // When someone pays to settle debt, their balance increases (less negative or more positive)
+            // and the receiver's balance decreases (less positive or more negative)
+            if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+              // Handle both old format ("You") and new format (user ID)
+              String actualSettlementFrom = settlementFrom;
+              String actualSettlementTo = settlementTo;
+
+              // Convert "You" to actual user ID for consistency
+              if (settlementFrom == 'You') {
+                actualSettlementFrom = user.uid;
+              }
+              if (settlementTo == 'You') {
+                actualSettlementTo = user.uid;
+              }
+
+              balances[actualSettlementFrom] = (balances[actualSettlementFrom] ?? 0.0) + settlementAmount;
+              balances[actualSettlementTo] = (balances[actualSettlementTo] ?? 0.0) - settlementAmount;
+            }
             continue;
           }
+
           if (split == 'equally' && participants.isNotEmpty) {
             final sharePerPerson = amount / participants.length;
             balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -186,17 +219,43 @@ class _UserHomePageState extends State<UserHomePage> {
             balances[paidBy] = (balances[paidBy] ?? 0.0) - payerShareConverted;
           }
         }
+
+        // Find user's balance using multiple possible keys
         String userKey = '';
-        if (balances.containsKey(user.uid ?? '')) {
-          userKey = user.uid ?? '';
-        } else if (balances.containsKey(user.email ?? '')) {
+        double userBalance = 0.0;
+
+        // Try different ways to identify the current user
+        if (balances.containsKey('You')) {
+          userKey = 'You';
+          userBalance = balances['You'] ?? 0.0;
+        } else if (balances.containsKey(user.uid)) {
+          userKey = user.uid;
+          userBalance = balances[userKey] ?? 0.0;
+        } else if (balances.containsKey(user.email)) {
           userKey = user.email ?? '';
+          userBalance = balances[userKey] ?? 0.0;
+        } else {
+          // Try to find by matching member data
+          for (var member in activityMembers) {
+            if (member is Map<String, dynamic>) {
+              if (member['id'] == user.uid || member['email'] == user.email) {
+                final memberKey = member['id'] ?? member['email'] ?? member['name'];
+                if (balances.containsKey(memberKey)) {
+                  userKey = memberKey;
+                  userBalance = balances[memberKey] ?? 0.0;
+                  break;
+                }
+              }
+            }
+          }
         }
-        final userBalance = userKey.isNotEmpty ? (balances[userKey] ?? 0.0) : 0.0;
+
         if (userBalance > 0) {
-          totalOwing += userBalance;
+          // Positive balance means user is owed money
+          totalOwed += userBalance;
         } else if (userBalance < 0) {
-          totalOwed += userBalance.abs();
+          // Negative balance means user owes money
+          totalOwing += userBalance.abs();
         }
       }
       setState(() {
@@ -402,6 +461,7 @@ class _UserHomePageState extends State<UserHomePage> {
           const SizedBox(height: 12),
 
           ...activities.map((activity) {
+            final user = FirebaseAuth.instance.currentUser;
             final title = activity['name'] ?? 'Untitled';
             final createdAt =
                 (activity['createdAt'] as Timestamp?)
@@ -412,7 +472,30 @@ class _UserHomePageState extends State<UserHomePage> {
                 '';
             final total = activity['totalAmount']?.toDouble() ?? 0.0;
             final balances = Map<String, dynamic>.from(activity['balances'] ?? {});
-            final userBalance = balances['You']?.toDouble() ?? 0.0;
+
+            // Find user balance using multiple possible keys
+            double userBalance = 0.0;
+            if (balances.containsKey('You')) {
+              userBalance = balances['You']?.toDouble() ?? 0.0;
+            } else if (user != null && balances.containsKey(user.uid)) {
+              userBalance = balances[user.uid]?.toDouble() ?? 0.0;
+            } else if (user != null && balances.containsKey(user.email)) {
+              userBalance = balances[user.email]?.toDouble() ?? 0.0;
+            } else if (user != null) {
+              // Try to find by matching member data
+              final activityMembers = activity['members'] as List<dynamic>? ?? [];
+              for (var member in activityMembers) {
+                if (member is Map<String, dynamic>) {
+                  if (member['id'] == user.uid || member['email'] == user.email) {
+                    final memberKey = member['id'] ?? member['email'] ?? member['name'];
+                    if (balances.containsKey(memberKey)) {
+                      userBalance = balances[memberKey]?.toDouble() ?? 0.0;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
             final members =
                 activity['members'] != null
                     ? (activity['members'] as List).length
@@ -599,50 +682,57 @@ class _UserHomePageState extends State<UserHomePage> {
   void _showSettleUpDialog() async {
     // Step 1: Select activity
     if (activities.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No activities to settle.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No activities to settle.')),
+        );
+      }
       return;
     }
     String? selectedActivityId;
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Activity'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: activities.length,
-            itemBuilder: (context, index) {
-              final activity = activities[index];
-              return ListTile(
-                title: Text(activity['name'] ?? 'Untitled'),
-                onTap: () {
-                  selectedActivityId = activity['id'];
-                  Navigator.pop(context);
-                },
-              );
-            },
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Activity'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: activities.length,
+              itemBuilder: (context, index) {
+                final activity = activities[index];
+                return ListTile(
+                  title: Text(activity['name'] ?? 'Untitled'),
+                  onTap: () {
+                    selectedActivityId = activity['id'];
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
     if (selectedActivityId == null) return;
     final selectedActivity = activities.firstWhere((a) => a['id'] == selectedActivityId);
     final balances = Map<String, dynamic>.from(selectedActivity['balances'] ?? {});
     // Step 2: Select user to settle with
     List<String> otherUsers = balances.keys.where((k) => k != 'You' && (balances[k] as num).abs() > 0).toList();
     if (otherUsers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No one to settle with in this activity.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No one to settle with in this activity.')),
+        );
+      }
       return;
     }
     String? selectedUser;
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
         title: const Text('Select User to Settle With'),
         content: SizedBox(
           width: double.maxFinite,
@@ -668,6 +758,7 @@ class _UserHomePageState extends State<UserHomePage> {
         ),
       ),
     );
+    }
     if (selectedUser == null) return;
     final userBalance = balances[selectedUser]?.toDouble() ?? 0.0;
     final isPositive = userBalance > 0;
@@ -675,9 +766,10 @@ class _UserHomePageState extends State<UserHomePage> {
     final TextEditingController amountController = TextEditingController(
       text: maxAmount.toStringAsFixed(2),
     );
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
         title: const Text('Enter Settlement Amount'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -736,6 +828,7 @@ class _UserHomePageState extends State<UserHomePage> {
         ],
       ),
     );
+    }
   }
 
   Future<void> _createSettlementTransaction(Map<String, dynamic> activity, String person, double balance) async {
@@ -744,20 +837,42 @@ class _UserHomePageState extends State<UserHomePage> {
       if (user != null) {
         final activityId = activity['id'];
         final ownerId = activity['isCreator'] ? user.uid : activity['ownerId'];
+        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+
+        // Get the activity's original currency
+        final activityCurrency = activity['currency'] ?? 'USD';
+        final activityCurrencyObj = currencyProvider.getCurrencyByCode(activityCurrency) ??
+                                   currencyProvider.selectedCurrency;
+
+        // Convert the settlement amount to the activity's currency
+        final settlementAmountInActivityCurrency = currencyProvider.convertCurrency(
+          balance.abs(),
+          currencyProvider.selectedCurrency,
+          activityCurrencyObj
+        );
+
         // Create a settlement transaction in the selected activity
         final isPositive = balance >= 0;
+
+        // Use the actual user ID instead of "You" for consistency with balance calculations
+        final currentUserKey = user.uid;
+
         final settlement = {
-          'title': isPositive ? '$person settled debt' : 'You settled debt with $person',
-          'amount': balance.abs(),
-          'currency': selectedCurrencyCode,
+          'title': isPositive ? 'You settled debt with $person' : '$person settled debt with you',
+          'amount': settlementAmountInActivityCurrency,
+          'currency': activityCurrency,
           'date': DateTime.now().toString().split(' ')[0],
           'description': 'Settlement transaction',
-          'paid_by': isPositive ? person : 'You',
-          'split': 'equally',
-          'participants': [isPositive ? 'You' : person],
+          'paid_by': isPositive ? currentUserKey : person,
+          'split': 'settlement', // Use a special split type for settlements
+          'participants': [person], // Only the other person participates in settlement
+          'settlement_amount': settlementAmountInActivityCurrency,
+          'settlement_from': isPositive ? currentUserKey : person,
+          'settlement_to': isPositive ? person : currentUserKey,
           'is_settlement': true,
           'timestamp': FieldValue.serverTimestamp(),
         };
+
         await FirebaseFirestore.instance
             .collection('users')
             .doc(ownerId)
@@ -765,20 +880,25 @@ class _UserHomePageState extends State<UserHomePage> {
             .doc(activityId)
             .collection('transactions')
             .add(settlement);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Settlement recorded successfully'),
-          ),
-        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Settlement recorded successfully'),
+            ),
+          );
+        }
         _loadUserData();
       }
     } catch (e) {
-      print('Error creating settlement: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error creating settlement: $e'),
-        ),
-      );
+      debugPrint('Error creating settlement: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating settlement: $e'),
+          ),
+        );
+      }
     }
   }
 

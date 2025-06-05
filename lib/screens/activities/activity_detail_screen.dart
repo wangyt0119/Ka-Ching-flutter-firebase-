@@ -53,6 +53,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   void initState() {
     super.initState();
     _loadActivityData().then((_) {
+      // Always recalculate totals to ensure database is up to date
       _recalculateActivityTotals();
     });
   }
@@ -255,7 +256,19 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
       final split = transaction['split'] ?? 'equally';
       final participants = List<String>.from(transaction['participants'] ?? []);
+      // Handle settlement transactions
       if (transaction['is_settlement'] == true) {
+        final settlementFrom = transaction['settlement_from'] ?? '';
+        final settlementTo = transaction['settlement_to'] ?? '';
+        final settlementAmount = amount;
+
+        // Apply settlement: reduce debt between parties
+        // When someone pays to settle debt, their balance increases (less negative or more positive)
+        // and the receiver's balance decreases (less positive or more negative)
+        if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+          balances[settlementFrom] = (balances[settlementFrom] ?? 0.0) + settlementAmount;
+          balances[settlementTo] = (balances[settlementTo] ?? 0.0) - settlementAmount;
+        }
         continue;
       }
       if (split == 'equally' && participants.isNotEmpty) {
@@ -448,7 +461,31 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
       final split = transaction['split'] ?? 'equally';
       final participants = List<String>.from(transaction['participants'] ?? []);
+      // Handle settlement transactions
       if (transaction['is_settlement'] == true) {
+        final settlementFrom = transaction['settlement_from'] ?? '';
+        final settlementTo = transaction['settlement_to'] ?? '';
+        final settlementAmount = amount;
+
+        // Apply settlement: reduce debt between parties
+        // When someone pays to settle debt, their balance increases (less negative or more positive)
+        // and the receiver's balance decreases (less positive or more negative)
+        if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+          // Handle both old format ("You") and new format (user ID)
+          String actualSettlementFrom = settlementFrom;
+          String actualSettlementTo = settlementTo;
+
+          // Convert "You" to actual user ID for consistency
+          if (settlementFrom == 'You') {
+            actualSettlementFrom = userId ?? userEmail ?? 'You';
+          }
+          if (settlementTo == 'You') {
+            actualSettlementTo = userId ?? userEmail ?? 'You';
+          }
+
+          balances[actualSettlementFrom] = (balances[actualSettlementFrom] ?? 0.0) + settlementAmount;
+          balances[actualSettlementTo] = (balances[actualSettlementTo] ?? 0.0) - settlementAmount;
+        }
         continue;
       }
       if (split == 'equally' && participants.isNotEmpty) {
@@ -579,22 +616,42 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
+        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+
+        // Get the activity's original currency
+        final activityCurrency = _activity!['currency'] ?? 'USD';
+        final activityCurrencyObj = currencyProvider.getCurrencyByCode(activityCurrency) ??
+                                   currencyProvider.selectedCurrency;
+
+        // Convert the settlement amount to the activity's currency if needed
+        final settlementAmountInActivityCurrency = currencyProvider.convertCurrency(
+          balance.abs(),
+          currencyProvider.selectedCurrency,
+          activityCurrencyObj
+        );
+
         // Determine who is paying whom
         final isPositive = balance >= 0;
-        final settlementTitle = isPositive 
-            ? 'You settled debt with $person' 
+        final settlementTitle = isPositive
+            ? 'You settled debt with $person'
             : '$person settled debt with you';
-        
+
+        // Use the actual user ID instead of "You" for consistency with balance calculations
+        final currentUserKey = user.uid;
+
         // Create a settlement transaction
         final settlement = {
           'title': settlementTitle,
-          'amount': balance.abs(),
-          'currency': _activity!['currency'] ?? '\$',
+          'amount': settlementAmountInActivityCurrency,
+          'currency': activityCurrency,
           'date': DateFormat.yMMMd().format(DateTime.now()),
           'description': 'Settlement transaction',
-          'paid_by': isPositive ? 'You' : person,
-          'split': 'equally',
-          'participants': [isPositive ? person : 'You'],
+          'paid_by': isPositive ? currentUserKey : person,
+          'split': 'settlement', // Use a special split type for settlements
+          'participants': [person], // Only the other person participates in settlement
+          'settlement_amount': settlementAmountInActivityCurrency,
+          'settlement_from': isPositive ? currentUserKey : person,
+          'settlement_to': isPositive ? person : currentUserKey,
           'is_settlement': true,
           'timestamp': FieldValue.serverTimestamp(),
         };
@@ -611,15 +668,19 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         // Reload activity data to update balances
         await _loadActivityData();
         await _recalculateActivityTotals();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settlement recorded successfully')),
-        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Settlement recorded successfully')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error recording settlement: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error recording settlement: $e')),
+        );
+      }
     }
   }
 
@@ -1028,9 +1089,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
       final selectedCurrency = currencyProvider.selectedCurrency;
 
-      // Calculate total amount spent in selected currency
+      // Calculate total amount spent in selected currency (excluding settlements)
       double totalAmount = 0.0;
       for (var transaction in _transactions) {
+        // Skip settlement transactions when calculating total spent
+        if (transaction['is_settlement'] == true) {
+          continue;
+        }
+
         final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
         final originalCurrency = transaction['currency'] ?? 'USD';
         final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
@@ -1061,7 +1127,32 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         final amount = currencyProvider.convertToSelectedCurrency(originalAmount, fromCurrency);
         final split = transaction['split'] ?? 'equally';
         final participants = List<String>.from(transaction['participants'] ?? []);
+
+        // Handle settlement transactions
         if (transaction['is_settlement'] == true) {
+          final settlementFrom = transaction['settlement_from'] ?? '';
+          final settlementTo = transaction['settlement_to'] ?? '';
+          final settlementAmount = amount;
+
+          // Apply settlement: reduce debt between parties
+          // When someone pays to settle debt, their balance increases (less negative or more positive)
+          // and the receiver's balance decreases (less positive or more negative)
+          if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+            // Handle both old format ("You") and new format (user ID)
+            String actualSettlementFrom = settlementFrom;
+            String actualSettlementTo = settlementTo;
+
+            // Convert "You" to actual user ID for consistency
+            if (settlementFrom == 'You') {
+              actualSettlementFrom = user.uid;
+            }
+            if (settlementTo == 'You') {
+              actualSettlementTo = user.uid;
+            }
+
+            balances[actualSettlementFrom] = (balances[actualSettlementFrom] ?? 0.0) + settlementAmount;
+            balances[actualSettlementTo] = (balances[actualSettlementTo] ?? 0.0) - settlementAmount;
+          }
           continue;
         }
         if (split == 'equally' && participants.isNotEmpty) {
@@ -1140,9 +1231,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     if (_activity == null) return const SizedBox();
     final currencyProvider = Provider.of<CurrencyProvider>(context);
     final selectedCurrency = currencyProvider.selectedCurrency;
-    // Recalculate total spent in memory using all transactions
+    // Recalculate total spent in memory using all transactions (excluding settlements)
     double totalAmount = 0.0;
     for (var transaction in _transactions) {
+      // Skip settlement transactions when calculating total spent
+      if (transaction['is_settlement'] == true) {
+        continue;
+      }
+
       final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
       final originalCurrency = transaction['currency'] ?? 'USD';
       final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
