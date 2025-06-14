@@ -30,10 +30,12 @@ class SettlementOption {
 class ActivityDetailsScreen extends StatefulWidget {
   final String activityId;
   final String? ownerId;
+  final String title;
 
   const ActivityDetailsScreen({
     super.key, 
     required this.activityId, 
+    required this.title, 
     this.ownerId,
   });
 
@@ -1342,7 +1344,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(_activity?['name'] ?? 'Activity Details'),
+        title: Text(widget.title),
         backgroundColor: const Color(0xFFF5A9C1),
         actions: [
           // Only show edit button if user is the creator

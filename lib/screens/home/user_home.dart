@@ -528,6 +528,7 @@ class _UserHomePageState extends State<UserHomePage> {
                             builder: (_) => ActivityDetailsScreen(
                               activityId: activity['id'],
                               ownerId: activity['isCreator'] ? null : activity['ownerId'],
+                              title: activity['name'],
                             ),
                           ),
                         ).then((_) => _loadUserData()); // Reload data when returning
