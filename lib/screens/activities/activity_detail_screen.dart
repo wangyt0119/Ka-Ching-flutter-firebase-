@@ -1344,29 +1344,33 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: const Color(0xFFF5A9C1),
-        actions: [
-          // Only show edit button if user is the creator
-          if (_isCreator)
-            IconButton(
-              icon: Icon(Icons.edit),
-              onPressed: () async {
-                final updated = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditActivityScreen(activityData: _activity!),
-                  ),
-                );
-
-                // Check if update happened, then reload
-                if (updated == true) {
-                  _loadActivityData();
-                }
-              },
-            ),
-        ],
+      title: Text(
+        widget.title,
+        style: TextStyle(color: Colors.white), 
       ),
+      iconTheme: IconThemeData(color: Colors.white), 
+      backgroundColor: const Color(0xFFF5A9C1), 
+      elevation: 4,
+      actions: [
+        if (_isCreator)
+          IconButton(
+            icon: Icon(Icons.edit, color: Colors.white), 
+            onPressed: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EditActivityScreen(activityData: _activity!),
+                ),
+              );
+
+              if (updated == true) {
+                _loadActivityData();
+              }
+            },
+          ),
+      ],
+    ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _activity == null
