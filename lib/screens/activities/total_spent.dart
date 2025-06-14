@@ -317,7 +317,7 @@ class _TotalSpentState extends State<TotalSpent> {
 
                       const SizedBox(width: 16),
 
-                      // Your share card
+                      // My Spent card
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(20),
@@ -351,7 +351,7 @@ class _TotalSpentState extends State<TotalSpent> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Your Share',
+                                    'My Spending',
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 14,
@@ -370,16 +370,6 @@ class _TotalSpentState extends State<TotalSpent> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                totalSpent == 0
-                                    ? 'No spending yet'
-                                    : '${(yourShare / totalSpent * 100).toStringAsFixed(1)}% of total',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
                             ],
                           ),
                         ),
