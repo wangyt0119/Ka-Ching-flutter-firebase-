@@ -1035,6 +1035,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final isPositive = option.balance >= 0;
     final maxAmount = option.balance.abs();
     
+    final currencySymbol = Provider.of<CurrencyProvider>(context, listen: false)
+        .getCurrencyByCode(_activity!['currency'] ?? 'USD')
+        ?.symbol ?? '\$';
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1055,7 +1059,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               controller: amountController,
               keyboardType: TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                prefixText: _activity!['currency'] ?? '\$',
+                prefixText: currencySymbol,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
