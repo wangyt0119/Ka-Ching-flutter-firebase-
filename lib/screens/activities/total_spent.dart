@@ -127,7 +127,7 @@ class _TotalSpentState extends State<TotalSpent> {
           }
 
           // For chart display, we'll use the primary currency (most used currency)
-          String primaryCurrency = 'USD';
+          String primaryCurrency = 'MYR';
           double maxTransactions = 0;
           monthTotalsByCurrency.forEach((currency, totals) {
             final transactionCount = totals.where((amount) => amount > 0).length;
