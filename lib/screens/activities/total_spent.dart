@@ -26,6 +26,7 @@ class TotalSpent extends StatefulWidget {
 
 class _TotalSpentState extends State<TotalSpent> {
   int _selectedYear = DateTime.now().year;
+  String _selectedCurrency = 'MYR'; // Default currency
 
   @override
   Widget build(BuildContext context) {
@@ -158,18 +159,16 @@ class _TotalSpentState extends State<TotalSpent> {
             }
           }
 
-          // For chart display, we'll use the primary currency (most used currency)
-          String primaryCurrency = 'MYR';
-          double maxTransactions = 0;
-          monthTotalsByCurrency.forEach((currency, totals) {
-            final transactionCount = totals.where((amount) => amount > 0).length;
-            if (transactionCount > maxTransactions) {
-              maxTransactions = transactionCount.toDouble();
-              primaryCurrency = currency;
-            }
-          });
+          // Get available currencies (only currencies that have been used)
+          final availableCurrencies = monthTotalsByCurrency.keys.toList()..sort();
+          
+          // Set default currency if current selection is not available
+          if (availableCurrencies.isNotEmpty && !availableCurrencies.contains(_selectedCurrency)) {
+            _selectedCurrency = availableCurrencies.contains('MYR') ? 'MYR' : availableCurrencies.first;
+          }
 
-          final monthTotals = monthTotalsByCurrency[primaryCurrency] ?? List<double>.filled(12, 0);
+          // Get data for selected currency
+          final monthTotals = monthTotalsByCurrency[_selectedCurrency] ?? List<double>.filled(12, 0);
           final maxAmount = monthTotals.isEmpty ? 0.0 : monthTotals.reduce((a, b) => a > b ? a : b);
           
           final bars = List<BarChartGroupData>.generate(12, (i) {
@@ -213,7 +212,14 @@ class _TotalSpentState extends State<TotalSpent> {
                   const SizedBox(height: 16),
                   _legend(accent, accentDark),
                   const SizedBox(height: 24),
-                  _chartCard(bars, maxAmount, primaryCurrency, formatWithOriginalCurrency),
+                  _chartCard(
+                    bars, 
+                    maxAmount, 
+                    _selectedCurrency, 
+                    formatWithOriginalCurrency,
+                    availableCurrencies,
+                    accent
+                  ),
                 ],
               ),
             ),
@@ -348,7 +354,7 @@ class _TotalSpentState extends State<TotalSpent> {
                       )
                     else
                       ...totalSpentByCurrency.entries.map((entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Text(
                           formatWithOriginalCurrency(entry.value, entry.key),
                           style: TextStyle(
@@ -416,7 +422,7 @@ class _TotalSpentState extends State<TotalSpent> {
                       )
                     else
                       ...yourShareByCurrency.entries.map((entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Text(
                           formatWithOriginalCurrency(entry.value, entry.key),
                           style: TextStyle(
@@ -497,8 +503,10 @@ class _TotalSpentState extends State<TotalSpent> {
   Widget _chartCard(
     List<BarChartGroupData> bars, 
     double maxAmount,
-    String primaryCurrency,
-    String Function(double, String) formatWithOriginalCurrency
+    String selectedCurrency,
+    String Function(double, String) formatWithOriginalCurrency,
+    List<String> availableCurrencies,
+    Color accent
   ) =>
       Container(
         padding: const EdgeInsets.all(20),
@@ -520,10 +528,15 @@ class _TotalSpentState extends State<TotalSpent> {
               children: [
                 const Icon(Icons.bar_chart, size: 24, color: Color(0xFFF5A9C1)),
                 const SizedBox(width: 8),
-                Text(
-                  'Monthly Spending ($primaryCurrency)',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)
+                Expanded(
+                  child: Text(
+                    'Monthly Spending',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)
+                  ),
                 ),
+                // Currency Selector
+                if (availableCurrencies.length > 1)
+                  _buildCurrencySelector(availableCurrencies, accent),
               ],
             ),
             const SizedBox(height: 20),
@@ -541,7 +554,7 @@ class _TotalSpentState extends State<TotalSpent> {
                         final month =
                             DateFormat('MMMM').format(DateTime(0, group.x + 1));
                         return BarTooltipItem(
-                          '$month\n${formatWithOriginalCurrency(rod.toY, primaryCurrency)}',
+                          '$month\n${formatWithOriginalCurrency(rod.toY, selectedCurrency)}',
                           const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.w500),
                         );
@@ -583,6 +596,56 @@ class _TotalSpentState extends State<TotalSpent> {
           ],
         ),
       );
+
+  Widget _buildCurrencySelector(List<String> availableCurrencies, Color accent) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withOpacity(0.3)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCurrency,
+          iconEnabledColor: accent,
+          dropdownColor: Colors.white,
+          style: TextStyle(
+            color: accent,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+          items: availableCurrencies.map((currencyCode) {
+            final currency = currencyProvider.getCurrencyByCode(currencyCode);
+            final displayText = currency != null 
+                ? '${currency.symbol} $currencyCode'
+                : currencyCode;
+            
+            return DropdownMenuItem(
+              value: currencyCode,
+              child: Text(
+                displayText,
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (String? newCurrency) {
+            if (newCurrency != null) {
+              setState(() {
+                _selectedCurrency = newCurrency;
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
 
   // ── HELPERS ────────────────────────────────────────────────────────────────
   Widget _centerMessage(String msg) => Center(
