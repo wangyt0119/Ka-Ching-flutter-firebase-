@@ -109,6 +109,9 @@ class _TotalSpentState extends State<TotalSpent> {
             // Use transaction's original currency
             final rawAmt = (data['amount'] ?? 0).toDouble();
             final currencyCode = data['currency'] ?? 'USD';
+            final splitMethod = data['split'] ?? 'equally';
+            final paidBy = data['paid_by'] ?? '';
+            final participants = List<String>.from(data['participants'] ?? []);
 
             // Initialize currency tracking if not exists
             if (!monthTotalsByCurrency.containsKey(currencyCode)) {
@@ -118,11 +121,40 @@ class _TotalSpentState extends State<TotalSpent> {
             }
 
             final mIndex = txDate.month - 1; // 0‑based
+            
+            // Add to total spent (total amount of the transaction)
             monthTotalsByCurrency[currencyCode]![mIndex] += rawAmt;
             totalSpentByCurrency[currencyCode] = (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
             
-            if (data['paid_by'] == uid) {
+            // Calculate user's share based on split method
+            double userShare = 0.0;
+            
+            if (splitMethod == 'equally') {
+              // Equal split among participants
+              if (participants.isNotEmpty) {
+                userShare = rawAmt / participants.length;
+              }
+            } else if (splitMethod == 'unequally') {
+              // Use custom shares
+              final shares = Map<String, dynamic>.from(data['shares'] ?? {});
+              userShare = (shares['You'] ?? 0).toDouble();
+            } else if (splitMethod == 'percentage') {
+              // Use percentage shares
+              final shares = Map<String, dynamic>.from(data['shares'] ?? {});
+              final percentage = (shares['You'] ?? 0).toDouble();
+              userShare = rawAmt * percentage / 100;
+            }
+            
+            // If current user paid for this transaction, add the full amount to their spending
+            // Otherwise, add only their share
+            if (paidBy == 'You' || paidBy == uid) {
+              // User paid for this transaction, so they spent the full amount
               yourShareByCurrency[currencyCode] = (yourShareByCurrency[currencyCode] ?? 0) + rawAmt;
+            } else {
+              // User didn't pay, but they owe their share
+              // This represents what they should pay back, not what they spent
+              // For "My Spending" we might want to show what they actually paid out
+              // Keep this as 0 since they didn't actually spend money on this transaction
             }
           }
 
@@ -138,7 +170,7 @@ class _TotalSpentState extends State<TotalSpent> {
           });
 
           final monthTotals = monthTotalsByCurrency[primaryCurrency] ?? List<double>.filled(12, 0);
-          final maxAmount = monthTotals.reduce((a, b) => a > b ? a : b);
+          final maxAmount = monthTotals.isEmpty ? 0.0 : monthTotals.reduce((a, b) => a > b ? a : b);
           
           final bars = List<BarChartGroupData>.generate(12, (i) {
             final isCurrentMonth =
@@ -305,17 +337,27 @@ class _TotalSpentState extends State<TotalSpent> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    ...totalSpentByCurrency.entries.map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        formatWithOriginalCurrency(entry.value, entry.key),
+                    if (totalSpentByCurrency.isEmpty)
+                      Text(
+                        'No expenses yet',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800]
+                          color: Colors.grey[600]
                         )
-                      ),
-                    )).toList(),
+                      )
+                    else
+                      ...totalSpentByCurrency.entries.map((entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          formatWithOriginalCurrency(entry.value, entry.key),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800]
+                          )
+                        ),
+                      )).toList(),
                   ],
                 ),
               ),
@@ -352,7 +394,7 @@ class _TotalSpentState extends State<TotalSpent> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'My Spending',
+                            'My Payments',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -363,17 +405,27 @@ class _TotalSpentState extends State<TotalSpent> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    ...yourShareByCurrency.entries.map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        formatWithOriginalCurrency(entry.value, entry.key),
+                    if (yourShareByCurrency.isEmpty)
+                      Text(
+                        'No payments yet',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[800]
+                          color: Colors.grey[600]
                         )
-                      ),
-                    )).toList(),
+                      )
+                    else
+                      ...yourShareByCurrency.entries.map((entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          formatWithOriginalCurrency(entry.value, entry.key),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800]
+                          )
+                        ),
+                      )).toList(),
                   ],
                 ),
               ),
@@ -441,7 +493,6 @@ class _TotalSpentState extends State<TotalSpent> {
     ),
   ],
 );
-
 
   Widget _chartCard(
     List<BarChartGroupData> bars, 
