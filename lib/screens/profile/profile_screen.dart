@@ -302,7 +302,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Divider
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Divider(thickness: 1),
+            child: Divider(
+              color: Color.fromARGB(255, 228, 207, 232),
+              thickness: 2
+              ),
           ),
 
           // Settings, Help, Currency, Logout options

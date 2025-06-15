@@ -392,7 +392,10 @@ class _UserHomePageState extends State<UserHomePage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Divider(),
+                  const Divider(
+                    color: Color.fromARGB(255, 228, 207, 232),
+                    thickness: 2,
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -507,141 +510,122 @@ class _UserHomePageState extends State<UserHomePage> {
             final amount = userBalance.abs();
 
             return Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              color: Theme.of(context).cardColor,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ActivityDetailsScreen(
-                              activityId: activity['id'],
-                              ownerId: activity['isCreator'] ? null : activity['ownerId'],
-                              title: activity['name'],
-                            ),
-                          ),
-                        ).then((_) => _loadUserData()); // Reload data when returning
-                      },
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryLightColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.hiking,
-                          color: AppTheme.accentColor,
-                        ),
-                      ),
-                      title: Text(
-                        title,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [Text(createdAt), const SizedBox(height: 4)],
-                      ),
-                      trailing: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _formatAmount(total),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            "Total spent",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.people,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          "$members members",
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
-                        ),
-                        Spacer(),
-                        status == 'owe'
-                            ? Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color.fromARGB(255, 254, 213, 217),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                "You owe ${_formatAmount(amount)}",
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(context).colorScheme.secondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            )
-                            : Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color.fromARGB(255, 214, 244, 215),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                "You get back ${_formatAmount(amount)}",
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(context).colorScheme.secondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                      ],
-                    ),
-                  ],
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12),
+  ),
+  color: Theme.of(context).cardColor,
+  elevation: 2,
+  child: Padding(
+    padding: const EdgeInsets.all(16), // Increased padding here
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ActivityDetailsScreen(
+                  activityId: activity['id'],
+                  ownerId: activity['isCreator'] ? null : activity['ownerId'],
+                  title: activity['name'],
                 ),
               ),
-            );
+            ).then((_) => _loadUserData());
+          },
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryLightColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.hiking,
+              color: AppTheme.accentColor,
+            ),
+          ),
+          title: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(createdAt),
+          ),
+          trailing: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _formatAmount(total),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Total spent",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12), // More space before divider
+        const Divider(
+          color: Color.fromARGB(255, 228, 207, 232),
+          thickness: 2,
+        ),
+        const SizedBox(height: 12), // More space after divider
+        Row(
+          children: [
+            Icon(
+              Icons.people,
+              size: 16,
+              color: Theme.of(context).colorScheme.secondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              "$members members",
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: status == 'owe'
+                    ? const Color.fromARGB(255, 254, 213, 217)
+                    : const Color.fromARGB(255, 214, 244, 215),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                status == 'owe'
+                    ? "You owe ${_formatAmount(amount)}"
+                    : "You get back ${_formatAmount(amount)}",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.secondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ),
+);
           }).toList(),
+          const SizedBox(height: 60),
         ],
       ),
     );
