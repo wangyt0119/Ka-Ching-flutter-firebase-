@@ -9,8 +9,6 @@ class ActivityScreen extends StatefulWidget {
   State<ActivityScreen> createState() => _ActivityScreenState();
 }
 
-
-
 class _ActivityScreenState extends State<ActivityScreen> {
   TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -22,6 +20,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   _searchController.dispose();
   super.dispose();
 }
+
 List<QueryDocumentSnapshot> _filterActivities(List<QueryDocumentSnapshot> docs) {
   if (_searchQuery.isEmpty) return docs;
   return docs.where((doc) {
@@ -190,45 +189,7 @@ List<QueryDocumentSnapshot> _filterActivities(List<QueryDocumentSnapshot> docs) 
                             ),
                           ],
                         ),
-                        trailing: isMobile
-                            ? const Icon(Icons.chevron_right)
-                            : PopupMenuButton(
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'view',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.visibility, size: 16),
-                                        SizedBox(width: 8),
-                                        Text('View'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit, size: 16),
-                                        SizedBox(width: 8),
-                                        Text('Edit'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete, size: 16, color: Colors.red),
-                                        SizedBox(width: 8),
-                                        Text('Delete', style: TextStyle(color: Colors.red)),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                onSelected: (value) {
-                                  // Handle menu actions
-                                },
-                              ),
+                        trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                         Navigator.push(
                           context,
