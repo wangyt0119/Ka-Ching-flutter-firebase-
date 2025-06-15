@@ -273,6 +273,7 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
                         child: const Text(
                           "Sign in",
                           style: TextStyle(
+                            color: Color.fromARGB(221, 255, 255, 255),
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../theme/app_theme.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -96,7 +97,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 decoration: InputDecoration(
                   labelText: 'Full Name',
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                   borderSide: const BorderSide(color: AppTheme.primaryColor),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   filled: true,
                   fillColor: Colors.white,

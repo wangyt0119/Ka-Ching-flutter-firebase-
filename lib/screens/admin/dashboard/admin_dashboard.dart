@@ -300,7 +300,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ),
                   child: const Icon(
                     Icons.admin_panel_settings,
-                    color: AppTheme.primaryColor,
+                    color: Color.fromARGB(255, 255, 173, 204),
                     size: 24,
                   ),
                 ),

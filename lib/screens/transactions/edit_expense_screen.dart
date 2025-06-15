@@ -499,6 +499,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                         prefixIcon: const Icon(Icons.title, color: Color(0xFFB19CD9)),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                                      const BorderSide(color: Color(0xFFB19CD9)),
                         ),
                       ),
                       validator: (value) {
@@ -523,6 +525,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                               prefixIcon: const Icon(Icons.attach_money, color: Color(0xFFB19CD9)),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                      const BorderSide(color: Color(0xFFB19CD9)),
                               ),
                             ),
                             validator: (value) {
@@ -546,6 +550,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                                 labelText: 'Currency',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
+                                  borderSide:
+                                      const BorderSide(color: Color(0xFFB19CD9)),
                                 ),
                               ),
                               child: Row(
@@ -583,6 +589,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFFB19CD9)),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                      const BorderSide(color: Color(0xFFB19CD9)),
                           ),
                         ),
                         child: Row(
@@ -605,6 +613,8 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                         prefixIcon: const Icon(Icons.description, color: Color(0xFFB19CD9)),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                                      const BorderSide(color: Color(0xFFB19CD9)),
                         ),
                       ),
                     ),

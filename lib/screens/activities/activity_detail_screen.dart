@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:provider/provider.dart';
 import '../../providers/currency_provider.dart';
+import 'total_spent.dart';
 
 // Helper class for settlement options
 class SettlementOption {
@@ -30,10 +31,12 @@ class SettlementOption {
 class ActivityDetailsScreen extends StatefulWidget {
   final String activityId;
   final String? ownerId;
+  final String title;
 
   const ActivityDetailsScreen({
     super.key, 
     required this.activityId, 
+    required this.title, 
     this.ownerId,
   });
 
@@ -1277,64 +1280,64 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     }
   }
 
-  Widget _buildActivitySummary() {
-    if (_activity == null) return const SizedBox();
-    final currencyProvider = Provider.of<CurrencyProvider>(context);
-    final selectedCurrency = currencyProvider.selectedCurrency;
+  // Widget _buildActivitySummary() {
+  //   if (_activity == null) return const SizedBox();
+  //   final currencyProvider = Provider.of<CurrencyProvider>(context);
+  //   final selectedCurrency = currencyProvider.selectedCurrency;
 
-    // Use the same logic as database storage: convert to USD first, then to display currency
-    final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
-      (c) => c.code == 'USD',
-      orElse: () => currencyProvider.selectedCurrency,
-    );
+  //   // Use the same logic as database storage: convert to USD first, then to display currency
+  //   final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
+  //     (c) => c.code == 'USD',
+  //     orElse: () => currencyProvider.selectedCurrency,
+  //   );
 
-    // Calculate total spent in USD base currency (excluding settlements)
-    double totalAmountInUSD = 0.0;
-    for (var transaction in _transactions) {
-      // Skip settlement transactions when calculating total spent
-      if (transaction['is_settlement'] == true) {
-        continue;
-      }
+  //   // Calculate total spent in USD base currency (excluding settlements)
+  //   double totalAmountInUSD = 0.0;
+  //   for (var transaction in _transactions) {
+  //     // Skip settlement transactions when calculating total spent
+  //     if (transaction['is_settlement'] == true) {
+  //       continue;
+  //     }
 
-      final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
-      final originalCurrency = transaction['currency'] ?? 'USD';
-      final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
-        (c) => c.code == originalCurrency,
-        orElse: () => baseCurrencyObj,
-      );
-      // Convert to USD base currency first
-      final convertedAmountInUSD = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
-      totalAmountInUSD += convertedAmountInUSD;
-    }
+  //     final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
+  //     final originalCurrency = transaction['currency'] ?? 'USD';
+  //     final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+  //       (c) => c.code == originalCurrency,
+  //       orElse: () => baseCurrencyObj,
+  //     );
+  //     // Convert to USD base currency first
+  //     final convertedAmountInUSD = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
+  //     totalAmountInUSD += convertedAmountInUSD;
+  //   }
 
-    // Now convert from USD to selected display currency
-    final totalAmountInDisplayCurrency = currencyProvider.convertCurrency(totalAmountInUSD, baseCurrencyObj, selectedCurrency);
-    final displayTotal = currencyProvider.formatAmount(totalAmountInDisplayCurrency);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _activity!['name'] ?? 'Activity',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.attach_money, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text('Total: $displayTotal'),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  //   // Now convert from USD to selected display currency
+  //   final totalAmountInDisplayCurrency = currencyProvider.convertCurrency(totalAmountInUSD, baseCurrencyObj, selectedCurrency);
+  //   final displayTotal = currencyProvider.formatAmount(totalAmountInDisplayCurrency);
+  //   return Card(
+  //     margin: const EdgeInsets.only(bottom: 16),
+  //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //     child: Padding(
+  //       padding: const EdgeInsets.all(16),
+  //       child: Column(
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: [
+  //           Text(
+  //             _activity!['name'] ?? 'Activity',
+  //             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+  //           ),
+  //           const SizedBox(height: 8),
+  //           Row(
+  //             children: [
+  //               const Icon(Icons.attach_money, size: 16, color: Colors.grey),
+  //               const SizedBox(width: 8),
+  //               Text('Total: $displayTotal'),
+  //             ],
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -1342,29 +1345,57 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(_activity?['name'] ?? 'Activity Details'),
-        backgroundColor: const Color(0xFFF5A9C1),
-        actions: [
-          // Only show edit button if user is the creator
-          if (_isCreator)
-            IconButton(
-              icon: Icon(Icons.edit),
-              onPressed: () async {
-                final updated = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditActivityScreen(activityData: _activity!),
-                  ),
-                );
-
-                // Check if update happened, then reload
-                if (updated == true) {
-                  _loadActivityData();
-                }
-              },
-            ),
-        ],
+      title: Text(
+        widget.title,
+        style: TextStyle(color: Colors.white), 
       ),
+      iconTheme: IconThemeData(color: Colors.white), 
+      backgroundColor: const Color(0xFFF5A9C1), 
+      elevation: 4,
+      actions: [
+        if (_isCreator)
+          IconButton(
+            icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser; 
+
+              if (user == null) return; 
+
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TotalSpent(
+                    activityId: widget.activityId,
+                    ownerUid: _isCreator ? user.uid : widget.ownerId!,
+                    activityData: _activity!,
+                  ),
+                ),
+              );
+
+              if (updated == true) {
+                _loadActivityData();
+              }
+            },
+          ),
+
+          IconButton(
+            icon: Icon(Icons.edit, color: Colors.white), 
+            onPressed: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EditActivityScreen(activityData: _activity!),
+                ),
+              );
+
+              if (updated == true) {
+                _loadActivityData();
+              }
+            },
+          ),
+      ],
+    ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _activity == null
@@ -1374,7 +1405,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildActivitySummary(),
+                      //_buildActivitySummary(),
                       // Activity Header
                       Card(
                         shape: RoundedRectangleBorder(

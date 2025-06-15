@@ -228,6 +228,7 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
                       child: const Text(
                         "CREATE ACCOUNT",
                         style: TextStyle(
+                          color: Color.fromARGB(221, 255, 255, 255),
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
