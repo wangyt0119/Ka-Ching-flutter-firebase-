@@ -49,8 +49,8 @@ class TransactionDetailsScreen extends StatelessWidget {
           'Transactions - $activityName',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: const Color(0xFFF3C4D6),
+        foregroundColor: const Color.fromARGB(221, 255, 255, 255),
         elevation: 0,
         shadowColor: Colors.black12,
         surfaceTintColor: Colors.transparent,
@@ -270,7 +270,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                       child: ExpansionTile(
                         tilePadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 8,
+                          vertical: 12, // Increased vertical padding
                         ),
                         leading: Container(
                           padding: const EdgeInsets.all(10),
@@ -297,7 +297,7 @@ class TransactionDetailsScreen extends StatelessWidget {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6), // Increased spacing
                             Row(
                               children: [
                                 Icon(
@@ -322,46 +322,40 @@ class TransactionDetailsScreen extends StatelessWidget {
                                   color: Colors.grey[600],
                                 ),
                                 const SizedBox(width: 4),
-                                Text(
-                                  'Paid by $paidBy',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey[600],
+                                Flexible( // Added Flexible to prevent overflow
+                                  child: Text(
+                                    'Paid by $paidBy',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[600],
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 4), // Added bottom spacing
                           ],
                         ),
-                        trailing: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '$currencySymbol${displayAmount.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: isIncome ? Colors.green : Colors.red,
-                              ),
-                            ),
-                            Text(
-                              currency, // Show the currency code
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (timestamp != null)
+                        trailing: SizedBox(
+                          width: 110, // Increased width for large amounts
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start, // Changed to start (left align)
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
                               Text(
-                                _formatTime(timestamp.toDate()),
+                                '$currencySymbol${displayAmount.toStringAsFixed(2)}',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
+                                  fontSize: 14, // Further reduced font size
+                                  fontWeight: FontWeight.bold,
+                                  color: isIncome ? Colors.green : Colors.red,
                                 ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                         children: [
                           Padding(
