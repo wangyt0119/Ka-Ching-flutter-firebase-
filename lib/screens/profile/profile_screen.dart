@@ -11,9 +11,6 @@ import 'help_support_screen.dart';
 import '../../services/currency_service.dart';
 import '../help/help_screen.dart';
 
-import 'dart:convert';
-import 'dart:typed_data';
-
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -28,7 +25,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String fullName = '';
   String email = '';
   bool isLoading = true;
-  Uint8List? profileImage;
   final TextEditingController _nameController = TextEditingController();
 
   @override
@@ -55,12 +51,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() {
             fullName = userDoc.get('full_name') ?? 'User';
             email = currentUser.email ?? 'No email';
-
-            final String? base64String = userDoc.get('profile_image');
-            if (base64String != null && base64String.isNotEmpty) {
-              profileImage = base64Decode(base64String);
-            } 
-
             isLoading = false;
           });
         } else {
@@ -69,7 +59,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'full_name': currentUser.displayName ?? 'User',
             'email': currentUser.email,
             'currency': 'MYR',
-            'profile_image': '',
             'created_at': FieldValue.serverTimestamp(),
           });
           setState(() {
@@ -268,31 +257,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               width: 100,
               height: 100,
-              child: profileImage != null
-                ? ClipOval(
-                    child: Image.memory(
-                      profileImage!,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Center(
-                    child: Text(
-                      isLoading
-                          ? ''
-                          : fullName.isNotEmpty
-                              ? fullName[0].toUpperCase()
-                              : 'U',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.secondary,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              child: Center(
+                child: Text(
+                  isLoading
+                      ? ''
+                      : fullName.isNotEmpty
+                      ? fullName[0].toUpperCase()
+                      : 'U',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
                   ),
-
-
+                ),
+              ),
             ),
           ),
 
