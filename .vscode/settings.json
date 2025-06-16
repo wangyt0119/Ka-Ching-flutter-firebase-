@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/UTM/Programming/Flutter/Ka-Ching-flutter-firebase-/windows"
+    "cmake.sourceDirectory": "C:/UTM/Programming/Flutter/Ka-Ching-flutter-firebase-/windows",
+    "java.configuration.updateBuildConfiguration": "disabled"
 }
