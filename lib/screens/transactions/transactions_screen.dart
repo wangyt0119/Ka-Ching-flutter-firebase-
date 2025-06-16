@@ -494,7 +494,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 onTap: () async {
                   await currencyProvider.setSelectedCurrency(currency);
                   if (context.mounted) {
-                    Navigator.pop(context,true);
+                    Navigator.pop(context);
                   }
                   },
                 );

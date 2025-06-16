@@ -314,7 +314,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                     : null,
                 onTap: () {
                   _updateCurrency(currency);
-                  Navigator.pop(context,true);
+                  Navigator.pop(context);
                 },
               );
             },
