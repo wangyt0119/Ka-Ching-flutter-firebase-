@@ -147,18 +147,27 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TransactionDetailScreen(
-                transactionId: transaction['id'],
-                activityId: widget.activityId,
-                ownerId: widget.ownerId,
-              ),
+        onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TransactionDetailScreen(
+              transactionId: transaction['id'],
+              activityId: widget.activityId,
+              ownerId: widget.ownerId,
             ),
-          );
-        },
+          ),
+        );
+
+        if (result == true) {
+          setState(() {
+            // This will refresh the screen
+          });
+          // Or call your own data loading function here if needed
+          // await _loadActivityData();
+        }
+      },
+
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
