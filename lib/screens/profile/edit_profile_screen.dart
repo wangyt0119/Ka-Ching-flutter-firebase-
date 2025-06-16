@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
@@ -7,7 +11,7 @@ class EditProfileScreen extends StatefulWidget {
   final String currentName;
 
   const EditProfileScreen({Key? key, required this.currentName})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -21,16 +25,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   bool _isLoading = false;
 
+  File? _profileImage;
+  String? _base64ProfileImage;
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.currentName);
+    _loadProfileImage();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProfileImage() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser != null) {
+      final doc =
+          await _firestore.collection('users').doc(currentUser.uid).get();
+      final data = doc.data();
+      if (data != null && data['profile_image'] != null) {
+        setState(() => _base64ProfileImage = data['profile_image']);
+      }
+    }
+  }
+
+  Future<void> _pickProfileImage() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      final bytes = await pickedFile.readAsBytes();
+      setState(() {
+        _profileImage = File(pickedFile.path);
+        _base64ProfileImage = base64Encode(bytes);
+      });
+    }
   }
 
   Future<void> _updateProfile() async {
@@ -41,15 +73,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final User? currentUser = _auth.currentUser;
       if (currentUser != null) {
-        await _firestore.collection('users').doc(currentUser.uid).update({
+        final Map<String, dynamic> updates = {
           'full_name': _nameController.text.trim(),
-        });
+        };
+
+        if (_base64ProfileImage != null) {
+          updates['profile_image'] = _base64ProfileImage;
+        }
+
+        await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .update(updates);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile updated successfully!')),
           );
-          Navigator.pop(context, true); // Return true to indicate success
+          Navigator.pop(context, true);
         }
       }
     } catch (e) {
@@ -89,15 +130,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
+
+              /// Profile image section
+              Center(
+                child: GestureDetector(
+                  onTap: _pickProfileImage,
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: const Color(0xFFB19CD9),
+                    backgroundImage: _base64ProfileImage != null
+                        ? MemoryImage(base64Decode(_base64ProfileImage!))
+                        : null,
+                    child: _base64ProfileImage == null
+                        ? const Icon(Icons.camera_alt,
+                            size: 40, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              /// Full name input
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
                   labelText: 'Full Name',
                   border: OutlineInputBorder(
-                   borderSide: const BorderSide(color: AppTheme.primaryColor),
+                    borderSide: const BorderSide(color: AppTheme.primaryColor),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   filled: true,
@@ -110,7 +172,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   return null;
                 },
               ),
+
               const SizedBox(height: 24),
+
+              /// Save changes button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -122,13 +187,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child:
-                      _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
-                            'Save Changes',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Save Changes',
+                          style: TextStyle(fontSize: 16, color: Colors.white),
+                        ),
                 ),
               ),
             ],
