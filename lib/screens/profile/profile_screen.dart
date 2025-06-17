@@ -56,10 +56,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fullName = userDoc.get('full_name') ?? 'User';
             email = currentUser.email ?? 'No email';
 
-            final String? base64String = userDoc.get('profile_image');
+            if (userDoc.data() != null && userDoc.data() is Map<String, dynamic>) {
+            final data = userDoc.data() as Map<String, dynamic>;
+            final String? base64String = data['profile_image'];
             if (base64String != null && base64String.isNotEmpty) {
               profileImage = base64Decode(base64String);
-            } 
+            }
+          }
+
 
             isLoading = false;
           });
