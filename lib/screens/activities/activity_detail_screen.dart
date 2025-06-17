@@ -210,13 +210,24 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      // Original currency (bigger)
                       Text(
-                        displayAmount,
+                        '$originalCurrency ${amount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
+                      // Converted currency (smaller)
+                      Text(
+                        displayAmount,
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       Text(
                         date,
                         style: const TextStyle(

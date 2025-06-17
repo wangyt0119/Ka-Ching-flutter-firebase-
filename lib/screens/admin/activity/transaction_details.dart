@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/currency_provider.dart';
 
 class TransactionDetailsScreen extends StatelessWidget {
   final String activity_id;
@@ -19,6 +21,7 @@ class TransactionDetailsScreen extends StatelessWidget {
     final activityName = activityData['name'] ?? 'Activity';
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 768;
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
 
     // Get current Firebase user
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -253,6 +256,14 @@ class TransactionDetailsScreen extends StatelessWidget {
 
                     // Get currency symbol based on the transaction's currency
                     final currencySymbol = _getCurrencySymbol(currency);
+                    
+                    // Convert to selected currency for display
+                    final originalCurrency = currencyProvider.availableCurrencies.firstWhere(
+                      (c) => c.code == currency,
+                      orElse: () => currencyProvider.selectedCurrency,
+                    );
+                    final convertedAmount = currencyProvider.convertToSelectedCurrency(displayAmount, originalCurrency);
+                    final convertedDisplay = currencyProvider.formatAmount(convertedAmount);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -338,18 +349,30 @@ class TransactionDetailsScreen extends StatelessWidget {
                           ],
                         ),
                         trailing: SizedBox(
-                          width: 110, // Increased width for large amounts
+                          width: 120, // Increased width for both currencies
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start, // Changed to start (left align)
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              // Original currency (bigger)
                               Text(
                                 '$currencySymbol${displayAmount.toStringAsFixed(2)}',
                                 style: TextStyle(
-                                  fontSize: 14, // Further reduced font size
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: isIncome ? Colors.green : Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              // Converted currency (smaller)
+                              Text(
+                                convertedDisplay,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,

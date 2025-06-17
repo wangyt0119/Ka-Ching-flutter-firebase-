@@ -389,17 +389,21 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      // Original value
+                                      // Original currency (bigger)
                                       Text(
                                         '$originalCurrency ${originalAmount.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                      ),
-                                      // Converted value
-                                      Text(
-                                        currencyProvider.formatAmount(convertedAmount),
                                         style: const TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      // Converted currency (smaller)
+                                      Text(
+                                        currencyProvider.formatAmount(convertedAmount),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
