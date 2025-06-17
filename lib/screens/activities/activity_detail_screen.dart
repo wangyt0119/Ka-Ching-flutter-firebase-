@@ -256,6 +256,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final userEmail = user?.email;
     final currencyProvider = Provider.of<CurrencyProvider>(context);
     final selectedCurrency = currencyProvider.selectedCurrency;
+    final currencySymbol = selectedCurrency.symbol;
     // Recalculate balances in memory using original transaction data
     Map<String, double> balances = {};
     if (_activity != null && _activity!['members'] != null) {
@@ -471,6 +472,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final userEmail = user?.email;
     final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
     final selectedCurrency = currencyProvider.selectedCurrency;
+    final currencySymbol = selectedCurrency.symbol;
     // Recalculate balances in memory using original transaction data
     Map<String, double> balances = {};
     if (_activity != null && _activity!['members'] != null) {
@@ -585,10 +587,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 final amount = entry.value.abs();
                 return ListTile(
                   title: Text(name),
-                  subtitle: Text('$name owes you ${currencyProvider.formatAmount(amount)}'),
+                  subtitle: Text('${name} owes you ${currencyProvider.formatAmount(amount)}'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: '$name owes you ${currencyProvider.formatAmount(amount)}'));
+                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: '${name} owes you ${currencyProvider.formatAmount(amount)}'));
                   },
                 );
               }).toList(),
@@ -1053,9 +1055,18 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final isPositive = option.balance >= 0;
     final maxAmount = option.balance.abs();
     
-    final currencySymbol = Provider.of<CurrencyProvider>(context, listen: false)
-        .getCurrencyByCode(_activity!['currency'] ?? 'USD')
-        ?.symbol ?? '\$';
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+    final selectedCurrency = currencyProvider.selectedCurrency;
+    final currencySymbol = selectedCurrency.symbol;
+    
+    final activityCurrency = _activity!['currency'] ?? 'USD';
+    final activityCurrencyObj = currencyProvider.getCurrencyByCode(activityCurrency) ?? selectedCurrency;
+    final amountInActivityCurrency = currencyProvider.convertCurrency(
+      option.balance.abs(),
+      selectedCurrency,
+      activityCurrencyObj,
+    );
+    final activityCurrencySymbol = activityCurrencyObj.symbol;
     
     showDialog(
       context: context,
@@ -1067,8 +1078,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           children: [
             Text(
               isPositive 
-                  ? 'You owe ${option.name} ${_activity!['currency'] ?? '\$'}${maxAmount.toStringAsFixed(2)}'
-                  : '${option.name} owes you ${_activity!['currency'] ?? '\$'}${maxAmount.toStringAsFixed(2)}'
+                  ? 'You owe ${option.name} $currencySymbol${maxAmount.toStringAsFixed(2)}'
+                  : '${option.name} owes you $currencySymbol${maxAmount.toStringAsFixed(2)}'
             ),
             const SizedBox(height: 16),
             const Text('How much would you like to settle?'),
