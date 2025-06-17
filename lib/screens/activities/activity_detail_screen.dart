@@ -55,10 +55,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadActivityData().then((_) {
-      // Always recalculate totals to ensure database is up to date
-      _recalculateActivityTotals();
-    });
+    _loadActivityData();
   }
 
   Future<void> _loadActivityData() async {
@@ -115,6 +112,9 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             _transactions = transactions;
             _isLoading = false;
           });
+
+          // Recalculate totals after loading data (but don't reload data again)
+          await _recalculateActivityTotals(skipDataReload: true);
         } else {
           setState(() {
             _isLoading = false;
@@ -160,11 +160,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         );
 
         if (result == true) {
-          setState(() {
-            // This will refresh the screen
-          });
-          // Or call your own data loading function here if needed
-          // await _loadActivityData();
+          await _loadActivityData();
         }
       },
 
@@ -699,7 +695,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             .add(settlement);
         
         // Reload activity data to update balances
-        await _loadActivityData();
         await _recalculateActivityTotals();
 
         if (mounted) {
@@ -1115,7 +1110,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   }
 
   // Add this method to recalculate totals and balances whenever transactions change
-  Future<void> _recalculateActivityTotals() async {
+  Future<void> _recalculateActivityTotals({bool skipDataReload = false}) async {
     if (_transactions.isEmpty) {
       return;
     }
@@ -1271,7 +1266,9 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         'balances': balances,
       });
 
-      await _loadActivityData();
+      if (!skipDataReload) {
+        await _loadActivityData();
+      }
     } catch (e) {
       print('Error recalculating totals: $e');
     }
@@ -1285,7 +1282,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           : _firestore.collection('users').doc(widget.ownerId).collection('activities').doc(widget.activityId);
       await activityRef.collection('transactions').doc(transactionId).delete();
       await _recalculateActivityTotals();
-      await _loadActivityData();
     }
   }
 
