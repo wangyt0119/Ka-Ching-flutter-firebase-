@@ -32,6 +32,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Map<String, dynamic>? _transaction;
   Map<String, dynamic>? _activity;
   List<Map<String, dynamic>> _participants = [];
+  bool _wasEdited = false;
 
   @override
   void initState() {
@@ -191,6 +192,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (result == true) {
       setState(() {
         _isLoading = true;
+        _wasEdited = true;
       });
       await _loadTransactionData();
     }
@@ -206,6 +208,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         backgroundColor: const Color(0xFFB19CD9),
         foregroundColor: Colors.white,
         title: const Text('Transaction Details'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Pass the result back if transaction was edited
+            Navigator.pop(context, _wasEdited);
+          },
+        ),
         actions: [
           if (_transaction != null)
             IconButton(

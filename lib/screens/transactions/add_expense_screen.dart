@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../services/currency_service.dart';
+import '../../services/ocr_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String activityId;
@@ -206,17 +207,152 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   Future<void> _pickImage() async {
-  final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
 
-  if (pickedFile != null) {
-    final imageBytes = await pickedFile.readAsBytes();
-    setState(() {
-      _receiptImage = File(pickedFile.path);
-      _base64Image = base64Encode(imageBytes);
-    });
+    if (pickedFile != null) {
+      final imageBytes = await pickedFile.readAsBytes();
+      setState(() {
+        _receiptImage = File(pickedFile.path);
+        _base64Image = base64Encode(imageBytes);
+      });
+      
+      // Show OCR processing option
+      _showOCRProcessingDialog();
+    }
   }
-}
 
+  Future<void> _processReceiptWithOCR() async {
+    if (_receiptImage == null) return;
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Processing receipt...'),
+            ],
+          ),
+        ),
+      );
+
+      // Process the receipt
+      final receiptData = await OCRService.processReceipt(_receiptImage!);
+      
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      // Show results and ask user to confirm
+      _showOCRResultsDialog(receiptData);
+      
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+      
+      // Show error
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error processing receipt: $e')),
+        );
+      }
+    }
+  }
+
+  void _showOCRProcessingDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Receipt Detected'),
+        content: const Text('Would you like to automatically extract information from this receipt?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _processReceiptWithOCR();
+            },
+            child: const Text('Extract Data'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showOCRResultsDialog(Map<String, dynamic> receiptData) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Receipt Data Extracted'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (receiptData['title'].isNotEmpty)
+                Text('Title: ${receiptData['title']}'),
+              if (receiptData['amount'] > 0)
+                Text('Amount: ${receiptData['amount']}'),
+              if (receiptData['date'].isNotEmpty)
+                Text('Date: ${receiptData['date']}'),
+              if (receiptData['merchant'].isNotEmpty)
+                Text('Merchant: ${receiptData['merchant']}'),
+              if (receiptData['items'].isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+                ...receiptData['items'].map<Widget>((item) => Text('• $item')),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _applyOCRData(receiptData);
+            },
+            child: const Text('Apply Data'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyOCRData(Map<String, dynamic> receiptData) {
+    setState(() {
+      if (receiptData['title'].isNotEmpty) {
+        _titleController.text = receiptData['title'];
+      }
+      if (receiptData['amount'] > 0) {
+        _amountController.text = receiptData['amount'].toString();
+      }
+      if (receiptData['description'].isNotEmpty) {
+        _descriptionController.text = receiptData['description'];
+      }
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Receipt data applied to form')),
+    );
+  }
 
   Future<void> _submitExpense() async {
     if (!_formKey.currentState!.validate() || selectedActivityId == null)
