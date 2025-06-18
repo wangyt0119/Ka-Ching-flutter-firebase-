@@ -184,6 +184,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           activityId: widget.activityId!,
           activityName: _activity?['name'] ?? 'Activity',
           transaction: _transaction!,
+          ownerId: widget.ownerId,
         ),
       ),
     );
