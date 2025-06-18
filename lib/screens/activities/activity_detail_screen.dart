@@ -246,6 +246,33 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     );
   }
 
+  // Helper to map userId/email to display name
+  Map<String, String> _buildIdToNameMap() {
+    final Map<String, String> idToName = {};
+    if (_activity != null && _activity!['members'] != null) {
+      for (var member in _activity!['members']) {
+        if (member is Map) {
+          final id = member['id'] ?? member['email'] ?? member['name'];
+          final name = member['name'] ?? member['email'] ?? member['id'];
+          idToName[id] = name;
+          if (member['email'] != null) idToName[member['email']] = name;
+        }
+      }
+    }
+    return idToName;
+  }
+
+  // 1. Helper to get all possible keys for a user
+  Set<String> _getUserKeys(User? user) {
+    final keys = <String>{};
+    if (user != null) {
+      if (user.uid.isNotEmpty) keys.add(user.uid);
+      if (user.email != null && user.email!.isNotEmpty) keys.add(user.email!);
+    }
+    keys.add('You');
+    return keys;
+  }
+
   // Add a method to show who owes you money
   Widget _buildBalancesCard() {
     if (_activity == null) {
@@ -281,10 +308,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         final settlementFrom = transaction['settlement_from'] ?? '';
         final settlementTo = transaction['settlement_to'] ?? '';
         final settlementAmount = amount;
-
-        // Apply settlement: reduce debt between parties
-        // When someone pays to settle debt, their balance increases (less negative or more positive)
-        // and the receiver's balance decreases (less positive or more negative)
         if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
           balances[settlementFrom] = (balances[settlementFrom] ?? 0.0) + settlementAmount;
           balances[settlementTo] = (balances[settlementTo] ?? 0.0) - settlementAmount;
@@ -297,7 +320,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         for (var participant in participants) {
           balances[participant] = (balances[participant] ?? 0.0) - sharePerPerson;
         }
-        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'unequally' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -306,7 +328,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        // Note: paidBy is already included in participants loop above, so no need to deduct again
       } else if (split == 'percentage' && transaction['shares'] != null) {
         final shares = Map<String, dynamic>.from(transaction['shares']);
         balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -316,39 +337,35 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
           final shareConverted = currencyProvider.convertToSelectedCurrency(shareOriginal, fromCurrency);
           balances[participant] = (balances[participant] ?? 0.0) - shareConverted;
         }
-        // Note: paidBy is already included in participants loop above, so no need to deduct again
       }
     }
-    // Consolidate all user balance entries into a single entry
-    // Find all possible keys that represent the current user
-    Set<String> userKeys = {};
-    if (userId != null) userKeys.add(userId);
-    if (userEmail != null) userKeys.add(userEmail);
-    userKeys.add('You'); // Always include "You" as a possible user key
-
-    // Consolidate all user balances into a single value
+    // After all balances are calculated, round balances close to zero to zero
+    balances.updateAll((key, value) => (value.abs() < 0.01) ? 0.0 : value);
     double currentUserBalance = 0.0;
-    for (String key in userKeys) {
+    for (String key in _getUserKeys(user)) {
       if (balances.containsKey(key)) {
         currentUserBalance += balances[key] ?? 0.0;
-        // Remove the entry to avoid double counting in settlement options
         balances.remove(key);
       }
     }
+    // At this point, balances contains only other users
+    // The sum of all balances (including currentUserBalance) should be zero
+    // Display logic:
+    final idToName = _buildIdToNameMap();
+    final peopleWhoOweYou = currentUserBalance > 0
+        ? balances.entries.where((entry) => entry.value < -0.01).toList()
+        : [];
+    final peopleYouOwe = currentUserBalance < 0
+        ? balances.entries.where((entry) => entry.value > 0.01).toList()
+        : [];
 
-    // Store the consolidated balance under the user's UID for consistency
-    if (userId != null) {
-      balances[userId] = currentUserBalance;
-    }
+    // Determine the owner ID
+    final ownerId = widget.ownerId ?? FirebaseAuth.instance.currentUser?.uid;
 
-    // Filter to show only people who owe you money (negative balances for others)
-    final peopleWhoOweYou = balances.entries
-        .where((entry) => !userKeys.contains(entry.key) && entry.value < 0)
-        .toList();
-    // Filter to show people you owe money to (positive balances for others)
-    final peopleYouOwe = balances.entries
-        .where((entry) => !userKeys.contains(entry.key) && entry.value > 0)
-        .toList();
+    // Filter out the owner from the peopleWhoOweYou and peopleYouOwe lists for settle up dialog
+    final filteredPeopleWhoOweYouCard = peopleWhoOweYou.where((entry) => entry.key != ownerId && entry.value.abs() > 0.01).toList();
+    final filteredPeopleYouOweCard = peopleYouOwe.where((entry) => entry.key != ownerId && entry.value.abs() > 0.01).toList();
+
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -385,21 +402,22 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             ),
             const Divider(height: 24),
             // People who owe you money
-            if (peopleWhoOweYou.isNotEmpty) ...[
+            if (filteredPeopleWhoOweYouCard.isNotEmpty) ...[
               const Text(
                 'People who owe you:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ...peopleWhoOweYou.map((entry) {
-                final name = entry.key;
-                final amount = entry.value.abs(); // Make positive for display
+              ...filteredPeopleWhoOweYouCard.map((entry) {
+                final rawKey = entry.key;
+                final displayName = idToName[rawKey] ?? rawKey; // fallback to rawKey if not found
+                final amount = entry.value.abs();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(name),
+                      Text(displayName),
                       Text(
                         currencyProvider.formatAmount(amount),
                         style: const TextStyle(
@@ -414,21 +432,22 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
               const Divider(height: 16),
             ],
             // People you owe money to
-            if (peopleYouOwe.isNotEmpty) ...[
+            if (filteredPeopleYouOweCard.isNotEmpty) ...[
               const Text(
                 'You owe:',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ...peopleYouOwe.map((entry) {
-                final name = entry.key;
-                final amount = entry.value; // Already positive
+              ...filteredPeopleYouOweCard.map((entry) {
+                final rawKey = entry.key;
+                final displayName = idToName[rawKey] ?? rawKey; // fallback to rawKey if not found
+                final amount = entry.value;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(name),
+                      Text(displayName),
                       Text(
                         currencyProvider.formatAmount(amount),
                         style: const TextStyle(
@@ -440,9 +459,23 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                   ),
                 );
               }).toList(),
+              const Divider(height: 16),
+            ],
+            if (filteredPeopleWhoOweYouCard.isEmpty && filteredPeopleYouOweCard.isEmpty) ...[
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  'All settled!',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
             // Add settle up button
-            if (peopleWhoOweYou.isNotEmpty || peopleYouOwe.isNotEmpty) ...[
+            if (filteredPeopleWhoOweYouCard.isNotEmpty || filteredPeopleYouOweCard.isNotEmpty) ...[
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -547,30 +580,28 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         // Note: paidBy is already included in participants loop above, so no need to deduct again
       }
     }
-    // Consolidate all user balance entries into a single entry
-    // Find all possible keys that represent the current user
-    Set<String> userKeys = {};
-    if (userId != null) userKeys.add(userId);
-    if (userEmail != null) userKeys.add(userEmail);
-    userKeys.add('You'); // Always include "You" as a possible user key
-
-    // Consolidate all user balances into a single value
+    // After all balances are calculated, round balances close to zero to zero
+    balances.updateAll((key, value) => (value.abs() < 0.01) ? 0.0 : value);
     double consolidatedUserBalance = 0.0;
-    for (String key in userKeys) {
+    for (String key in _getUserKeys(user)) {
       if (balances.containsKey(key)) {
         consolidatedUserBalance += balances[key] ?? 0.0;
-        // Remove the entry to avoid double counting in settlement options
         balances.remove(key);
       }
     }
 
-    // Store the consolidated balance under the user's UID for consistency (but don't include in settlement options)
-    if (userId != null && consolidatedUserBalance != 0.0) {
-      balances[userId] = consolidatedUserBalance;
-    }
-
-    final peopleWhoOweYou = balances.entries.where((entry) => !userKeys.contains(entry.key) && entry.value < 0).toList();
-    final peopleYouOwe = balances.entries.where((entry) => !userKeys.contains(entry.key) && entry.value > 0).toList();
+    // Filter to show only people who owe you money (negative balances for others)
+    final peopleWhoOweYou = balances.entries
+        .where((entry) => !_getUserKeys(user).contains(entry.key) && entry.value < -0.01)
+        .toList();
+    // Filter to show people you owe money to (positive balances for others)
+    final peopleYouOwe = balances.entries
+        .where((entry) => !_getUserKeys(user).contains(entry.key) && entry.value > 0.01)
+        .toList();
+    final idToName = _buildIdToNameMap();
+    final ownerIdDialog = widget.ownerId ?? FirebaseAuth.instance.currentUser?.uid;
+    final filteredPeopleWhoOweYouDialog = peopleWhoOweYou.where((entry) => entry.key != ownerIdDialog && entry.value.abs() > 0.01).toList();
+    final filteredPeopleYouOweDialog = peopleYouOwe.where((entry) => entry.key != ownerIdDialog && entry.value.abs() > 0.01).toList();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -582,27 +613,29 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             children: [
               const Text('Select who you want to settle up with:'),
               const SizedBox(height: 16),
-              ...peopleWhoOweYou.map((entry) {
-                final name = entry.key;
+              ...filteredPeopleWhoOweYouDialog.map((entry) {
+                final rawKey = entry.key;
+                final displayName = idToName[rawKey] ?? rawKey; // fallback to rawKey if not found
                 final amount = entry.value.abs();
                 return ListTile(
-                  title: Text(name),
-                  subtitle: Text('${name} owes you ${currencyProvider.formatAmount(amount)}'),
+                  title: Text(displayName),
+                  subtitle: Text('${displayName} owes you ${currencyProvider.formatAmount(amount)}'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: '${name} owes you ${currencyProvider.formatAmount(amount)}'));
+                    _showSettlementAmountDialog(SettlementOption(name: displayName, balance: entry.value, displayText: '${displayName} owes you ${currencyProvider.formatAmount(amount)}'));
                   },
                 );
               }).toList(),
-              ...peopleYouOwe.map((entry) {
-                final name = entry.key;
+              ...filteredPeopleYouOweDialog.map((entry) {
+                final rawKey = entry.key;
+                final displayName = idToName[rawKey] ?? rawKey; // fallback to rawKey if not found
                 final amount = entry.value;
                 return ListTile(
-                  title: Text(name),
-                  subtitle: Text('You owe $name ${currencyProvider.formatAmount(amount)}'),
+                  title: Text(displayName),
+                  subtitle: Text('You owe $displayName ${currencyProvider.formatAmount(amount)}'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showSettlementAmountDialog(SettlementOption(name: name, balance: entry.value, displayText: 'You owe $name ${currencyProvider.formatAmount(amount)}'));
+                    _showSettlementAmountDialog(SettlementOption(name: displayName, balance: entry.value, displayText: 'You owe $displayName ${currencyProvider.formatAmount(amount)}'));
                   },
                 );
               }).toList(),
@@ -810,6 +843,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
             .where((entry) => entry.key != 'You' && entry.value > 0)
             .toList();
         
+        final idToName = _buildIdToNameMap();
+        
         pdf.addPage(
           pw.Page(
             pageFormat: PdfPageFormat.a4,
@@ -840,7 +875,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     pw.Text('People who owe you:'),
                     pw.SizedBox(height: 10),
                     ...peopleWhoOweYou.map((entry) {
-                      final name = entry.key;
+                      final rawKey = entry.key;
+                      final displayName = idToName[rawKey] ?? rawKey;
                       final amount = entry.value.abs();
                       
                       return pw.Padding(
@@ -848,7 +884,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text(name),
+                            pw.Text(displayName),
                             pw.Text(
                               '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
                             ),
@@ -864,7 +900,8 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     pw.Text('You owe:'),
                     pw.SizedBox(height: 10),
                     ...peopleYouOwe.map((entry) {
-                      final name = entry.key;
+                      final rawKey = entry.key;
+                      final displayName = idToName[rawKey] ?? rawKey;
                       final amount = entry.value;
                       
                       return pw.Padding(
@@ -872,7 +909,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text(name),
+                            pw.Text(displayName),
                             pw.Text(
                               '${_activity!['currency'] ?? '\$'}${amount.toStringAsFixed(2)}',
                             ),
@@ -1246,26 +1283,14 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         }
       }
 
-      // Consolidate all user balance entries into a single entry before saving to database
-      // Find all possible keys that represent the current user
-      Set<String> userKeys = {};
-      if (user.uid.isNotEmpty) userKeys.add(user.uid);
-      if (user.email != null && user.email!.isNotEmpty) userKeys.add(user.email!);
-      userKeys.add('You'); // Always include "You" as a possible user key
-
-      // Consolidate all user balances into a single value
+      // After all balances are calculated, round balances close to zero to zero
+      balances.updateAll((key, value) => (value.abs() < 0.01) ? 0.0 : value);
       double consolidatedUserBalance = 0.0;
-      for (String key in userKeys) {
+      for (String key in _getUserKeys(user)) {
         if (balances.containsKey(key)) {
           consolidatedUserBalance += balances[key] ?? 0.0;
-          // Remove the entry to avoid multiple user entries in database
           balances.remove(key);
         }
-      }
-
-      // Store the consolidated balance under the user's UID for consistency
-      if (consolidatedUserBalance != 0.0) {
-        balances[user.uid] = consolidatedUserBalance;
       }
 
       DocumentReference activityRef;

@@ -61,14 +61,16 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Future<void> _fetchActivities() async {
     final user = _auth.currentUser!;
-    final snapshot = await _firestore
+    final List<Map<String, dynamic>> allActivities = [];
+
+    // First, get activities created by the current user
+    final ownActivitiesSnapshot = await _firestore
         .collection('users')
         .doc(user.uid)
         .collection('activities')
         .get();
 
-    final activities = await Future.wait(snapshot.docs.map((doc) async {
-      // Get the activity data
+    final ownActivities = await Future.wait(ownActivitiesSnapshot.docs.map((doc) async {
       final activityData = doc.data();
       
       // Get the latest friends list
@@ -82,30 +84,84 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         return friendDoc.data()['name'] as String;
       }).toList();
       
-      // Return the activity with updated friends list
       return {
         'id': doc.id,
         'name': activityData['name'] ?? 'Unnamed Activity',
         'friends': friends,
+        'ownerId': user.uid,
+        'isCreator': true,
       };
     }).toList());
 
+    allActivities.addAll(ownActivities);
+
+    // Then, get activities where user is a participant (but not creator)
+    final usersSnapshot = await _firestore
+        .collection('users')
+        .get();
+
+    for (var userDoc in usersSnapshot.docs) {
+      if (userDoc.id == user.uid) continue;
+      
+      final activitiesSnapshot = await _firestore
+          .collection('users')
+          .doc(userDoc.id)
+          .collection('activities')
+          .get();
+
+      for (var activityDoc in activitiesSnapshot.docs) {
+        final activityData = activityDoc.data();
+        final members = activityData['members'] as List<dynamic>? ?? [];
+        bool isParticipant = false;
+        
+        for (var member in members) {
+          if (member is Map<String, dynamic> && 
+              (member['id'] == user.uid || 
+               member['email'] == user.email)) {
+            isParticipant = true;
+            break;
+          }
+        }
+        
+        if (isParticipant) {
+          // Get the latest friends list for this activity
+          final friendsSnapshot = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('friends')
+              .get();
+              
+          final friends = friendsSnapshot.docs.map((friendDoc) {
+            return friendDoc.data()['name'] as String;
+          }).toList();
+          
+          allActivities.add({
+            'id': activityDoc.id,
+            'name': activityData['name'] ?? 'Unnamed Activity',
+            'friends': friends,
+            'ownerId': userDoc.id,
+            'isCreator': false,
+          });
+        }
+      }
+    }
+
     setState(() {
-      userActivities = activities;
-      if (activities.isNotEmpty) {
+      userActivities = allActivities;
+      if (allActivities.isNotEmpty) {
         // If activityId was provided, select that activity
         if (widget.activityId.isNotEmpty) {
-          final selectedActivity = activities.firstWhere(
+          final selectedActivity = allActivities.firstWhere(
             (activity) => activity['id'] == widget.activityId,
-            orElse: () => activities[0],
+            orElse: () => allActivities[0],
           );
           selectedActivityId = selectedActivity['id'];
           selectedActivityName = selectedActivity['name'];
           _setParticipants(selectedActivity['friends']);
         } else {
-          selectedActivityId = activities[0]['id'];
-          selectedActivityName = activities[0]['name'];
-          _setParticipants(activities[0]['friends']);
+          selectedActivityId = allActivities[0]['id'];
+          selectedActivityName = allActivities[0]['name'];
+          _setParticipants(allActivities[0]['friends']);
         }
       }
     });
