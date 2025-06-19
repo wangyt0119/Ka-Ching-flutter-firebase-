@@ -95,7 +95,7 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
           .set({
         'full_name': fullNameController.text.trim(),
         'email': emailController.text.trim(),
-        'role': selectedRole,
+        //'role': selectedRole,
         'currency': 'MYR',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -130,11 +130,21 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: SizedBox(
-                  width: 120,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Image.asset('kaching.png'),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 40.0, bottom: 20.0), // Increased top padding and added bottom padding
+                  child: Container(
+                    padding: const EdgeInsets.all(16.0), // Padding around the logo
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9), // Optional: slight background for the logo
+                      borderRadius: BorderRadius.circular(16.0), // Optional: rounded corners
+                    ),
+                    child: SizedBox(
+                      width: 120,
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: Image.asset('assets/kaching.png'),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -189,27 +199,27 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedRole,
-                decoration: InputDecoration(
-                  labelText: 'Select Role',
-                  filled: true,
-                  fillColor: AppTheme.surfaceColor,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.dividerColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.primaryColor),
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'user', child: Text('User')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                ],
-                onChanged: (value) => setState(() => selectedRole = value!),
-              ),
+              // DropdownButtonFormField<String>(
+              //   value: selectedRole,
+              //   decoration: InputDecoration(
+              //     labelText: 'Select Role',
+              //     filled: true,
+              //     fillColor: AppTheme.surfaceColor,
+              //     enabledBorder: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(16),
+              //       borderSide: const BorderSide(color: AppTheme.dividerColor),
+              //     ),
+              //     focusedBorder: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(16),
+              //       borderSide: const BorderSide(color: AppTheme.primaryColor),
+              //     ),
+              //   ),
+              //   items: const [
+              //     DropdownMenuItem(value: 'user', child: Text('User')),
+              //     DropdownMenuItem(value: 'admin', child: Text('Admin')),
+              //   ],
+              //   onChanged: (value) => setState(() => selectedRole = value!),
+              // ),
               const SizedBox(height: 20),
               if (errorMessage != null)
                 Text(errorMessage!,
