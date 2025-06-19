@@ -1405,31 +1405,30 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       backgroundColor: const Color(0xFFF5A9C1), 
       elevation: 4,
       actions: [
-        if (_isCreator)
-          IconButton(
-            icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
-            onPressed: () async {
-              final user = FirebaseAuth.instance.currentUser; 
+        IconButton(
+          icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
+          onPressed: () async {
+            final user = FirebaseAuth.instance.currentUser; 
 
-              if (user == null) return; 
+            if (user == null) return; 
 
-              final updated = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TotalSpent(
-                    activityId: widget.activityId,
-                    ownerUid: _isCreator ? user.uid : widget.ownerId!,
-                    activityData: _activity!,
-                  ),
+            final updated = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TotalSpent(
+                  activityId: widget.activityId,
+                  ownerUid: _isCreator ? user.uid : widget.ownerId!,
+                  activityData: _activity!,
                 ),
-              );
+              ),
+            );
 
-              if (updated == true) {
-                _loadActivityData();
-              }
-            },
-          ),
-
+            if (updated == true) {
+              _loadActivityData();
+            }
+          },
+        ),
+        if (_isCreator)
           IconButton(
             icon: Icon(Icons.edit, color: Colors.white), 
             onPressed: () async {
