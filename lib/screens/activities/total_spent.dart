@@ -24,9 +24,22 @@ class TotalSpent extends StatefulWidget {
   State<TotalSpent> createState() => _TotalSpentState();
 }
 
-class _TotalSpentState extends State<TotalSpent> {
+class _TotalSpentState extends State<TotalSpent> with SingleTickerProviderStateMixin {
   int _selectedYear = DateTime.now().year;
   String _selectedCurrency = 'MYR'; // Default currency
+  late TabController _tabController;
+  
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,170 +74,25 @@ class _TotalSpentState extends State<TotalSpent> {
         actions: [
           _buildYearPicker(accent),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: const [
+            Tab(text: 'Monthly'),
+            Tab(text: 'Categories'),
+          ],
+        ),
       ),
 
       // ── MAIN BODY ────────────────────────────────────────────────────────────
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.ownerUid)
-            .collection('activities')
-            .doc(widget.activityId)
-            .collection('transactions')
-            .orderBy('timestamp')
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return _centerMessage('Something went wrong\n${snap.error}');
-          }
-          if (snap.connectionState == ConnectionState.waiting) {
-            return _loading(accent);
-          }
-
-          final docs = snap.data?.docs ?? [];
-          if (docs.isEmpty) {
-            return _centerMessage('No transactions yet');
-          }
-
-          // ── AGGREGATE BY CURRENCY ──
-          final monthTotalsByCurrency = <String, List<double>>{};
-          final totalSpentByCurrency = <String, double>{};
-          final yourShareByCurrency = <String, double>{};
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-
-          for (final d in docs) {
-            final data = d.data() as Map<String, dynamic>;
-            if (data['is_settlement'] == true) continue;
-
-            // Parse date (Timestamp or String)
-            final rawDate = data['date'] ?? data['timestamp'];
-            DateTime? txDate;
-            if (rawDate is Timestamp) {
-              txDate = rawDate.toDate();
-            } else if (rawDate is String) {
-              txDate = DateTime.tryParse(rawDate) ??
-                       DateFormat('MMM dd, yyyy').tryParse(rawDate);
-            }
-            if (txDate == null || txDate.year != _selectedYear) continue;
-
-            // Use transaction's original currency
-            final rawAmt = (data['amount'] ?? 0).toDouble();
-            final currencyCode = data['currency'] ?? 'USD';
-            final splitMethod = data['split'] ?? 'equally';
-            final paidBy = data['paid_by'] ?? '';
-            final participants = List<String>.from(data['participants'] ?? []);
-
-            // Initialize currency tracking if not exists
-            if (!monthTotalsByCurrency.containsKey(currencyCode)) {
-              monthTotalsByCurrency[currencyCode] = List<double>.filled(12, 0);
-              totalSpentByCurrency[currencyCode] = 0;
-              yourShareByCurrency[currencyCode] = 0;
-            }
-
-            final mIndex = txDate.month - 1; // 0‑based
-            
-            // Add to total spent (total amount of the transaction)
-            monthTotalsByCurrency[currencyCode]![mIndex] += rawAmt;
-            totalSpentByCurrency[currencyCode] = (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
-            
-            // Calculate user's share based on split method
-            double userShare = 0.0;
-            
-            if (splitMethod == 'equally') {
-              // Equal split among participants
-              if (participants.isNotEmpty) {
-                userShare = rawAmt / participants.length;
-              }
-            } else if (splitMethod == 'unequally') {
-              // Use custom shares
-              final shares = Map<String, dynamic>.from(data['shares'] ?? {});
-              userShare = (shares['You'] ?? 0).toDouble();
-            } else if (splitMethod == 'percentage') {
-              // Use percentage shares
-              final shares = Map<String, dynamic>.from(data['shares'] ?? {});
-              final percentage = (shares['You'] ?? 0).toDouble();
-              userShare = rawAmt * percentage / 100;
-            }
-            
-            // If current user paid for this transaction, add the full amount to their spending
-            // Otherwise, add only their share
-            if (paidBy == 'You' || paidBy == uid) {
-              // User paid for this transaction, so they spent the full amount
-              yourShareByCurrency[currencyCode] = (yourShareByCurrency[currencyCode] ?? 0) + rawAmt;
-            } else {
-              // User didn't pay, but they owe their share
-              // This represents what they should pay back, not what they spent
-              // For "My Spending" we might want to show what they actually paid out
-              // Keep this as 0 since they didn't actually spend money on this transaction
-            }
-          }
-
-          // Get available currencies (only currencies that have been used)
-          final availableCurrencies = monthTotalsByCurrency.keys.toList()..sort();
-          
-          // Set default currency if current selection is not available
-          if (availableCurrencies.isNotEmpty && !availableCurrencies.contains(_selectedCurrency)) {
-            _selectedCurrency = availableCurrencies.contains('MYR') ? 'MYR' : availableCurrencies.first;
-          }
-
-          // Get data for selected currency
-          final monthTotals = monthTotalsByCurrency[_selectedCurrency] ?? List<double>.filled(12, 0);
-          final maxAmount = monthTotals.isEmpty ? 0.0 : monthTotals.reduce((a, b) => a > b ? a : b);
-          
-          final bars = List<BarChartGroupData>.generate(12, (i) {
-            final isCurrentMonth =
-                i == DateTime.now().month - 1 && _selectedYear == DateTime.now().year;
-            final hasData = monthTotals[i] > 0;
-            return BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: monthTotals[i],
-                  color: isCurrentMonth
-                      ? accentDark
-                      : hasData
-                          ? accent
-                          : Colors.grey[200],
-                  width: 16,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    topRight: Radius.circular(4),
-                  ),
-                ),
-              ],
-            );
-          });
-
-          // ── UI ──
-          return SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _summaryCardsByCurrency(
-                    accent, 
-                    accentDark, 
-                    totalSpentByCurrency, 
-                    yourShareByCurrency,
-                    formatWithOriginalCurrency
-                  ),
-                  const SizedBox(height: 16),
-                  _legend(accent, accentDark),
-                  const SizedBox(height: 24),
-                  _chartCard(
-                    bars, 
-                    maxAmount, 
-                    _selectedCurrency, 
-                    formatWithOriginalCurrency,
-                    availableCurrencies,
-                    accent
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildMonthlyView(context, accent, accentDark, formatWithOriginalCurrency),
+          _buildCategoryView(context, accent, accentDark, formatWithOriginalCurrency),
+        ],
       ),
     );
   }
@@ -666,4 +534,526 @@ class _TotalSpentState extends State<TotalSpent> {
           ],
         ),
       );
+
+  Widget _buildMonthlyView(
+    BuildContext context, 
+    Color accent, 
+    Color accentDark, 
+    String Function(double, String) formatWithOriginalCurrency
+  ) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.ownerUid)
+          .collection('activities')
+          .doc(widget.activityId)
+          .collection('transactions')
+          .orderBy('timestamp')
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return _centerMessage('Something went wrong\n${snap.error}');
+        }
+        if (snap.connectionState == ConnectionState.waiting) {
+          return _loading(accent);
+        }
+
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return _centerMessage('No transactions yet');
+        }
+
+        // ── AGGREGATE BY CURRENCY ──
+        final monthTotalsByCurrency = <String, List<double>>{};
+        final totalSpentByCurrency = <String, double>{};
+        final yourShareByCurrency = <String, double>{};
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+
+        for (final d in docs) {
+          final data = d.data() as Map<String, dynamic>;
+          if (data['is_settlement'] == true) continue;
+
+          // Parse date (Timestamp or String)
+          final rawDate = data['date'] ?? data['timestamp'];
+          DateTime? txDate;
+          if (rawDate is Timestamp) {
+            txDate = rawDate.toDate();
+          } else if (rawDate is String) {
+            txDate = DateTime.tryParse(rawDate) ??
+                     DateFormat('MMM dd, yyyy').tryParse(rawDate);
+          }
+          if (txDate == null || txDate.year != _selectedYear) continue;
+
+          // Use transaction's original currency
+          final rawAmt = (data['amount'] ?? 0).toDouble();
+          final currencyCode = data['currency'] ?? 'USD';
+          final splitMethod = data['split'] ?? 'equally';
+          final paidBy = data['paid_by'] ?? '';
+          final participants = List<String>.from(data['participants'] ?? []);
+
+          // Initialize currency tracking if not exists
+          if (!monthTotalsByCurrency.containsKey(currencyCode)) {
+            monthTotalsByCurrency[currencyCode] = List<double>.filled(12, 0);
+            totalSpentByCurrency[currencyCode] = 0;
+            yourShareByCurrency[currencyCode] = 0;
+          }
+
+          final mIndex = txDate.month - 1; // 0‑based
+          
+          // Add to total spent (total amount of the transaction)
+          monthTotalsByCurrency[currencyCode]![mIndex] += rawAmt;
+          totalSpentByCurrency[currencyCode] = (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
+          
+          // Calculate user's share based on split method
+          double userShare = 0.0;
+          
+          if (splitMethod == 'equally') {
+            // Equal split among participants
+            if (participants.isNotEmpty) {
+              userShare = rawAmt / participants.length;
+            }
+          } else if (splitMethod == 'unequally') {
+            // Use custom shares
+            final shares = Map<String, dynamic>.from(data['shares'] ?? {});
+            userShare = (shares['You'] ?? 0).toDouble();
+          } else if (splitMethod == 'percentage') {
+            // Use percentage shares
+            final shares = Map<String, dynamic>.from(data['shares'] ?? {});
+            final percentage = (shares['You'] ?? 0).toDouble();
+            userShare = rawAmt * percentage / 100;
+          }
+          
+          // If current user paid for this transaction, add the full amount to their spending
+          // Otherwise, add only their share
+          if (paidBy == 'You' || paidBy == uid) {
+            // User paid for this transaction, so they spent the full amount
+            yourShareByCurrency[currencyCode] = (yourShareByCurrency[currencyCode] ?? 0) + rawAmt;
+          } else {
+            // User didn't pay, but they owe their share
+            // This represents what they should pay back, not what they spent
+            // For "My Spending" we might want to show what they actually paid out
+            // Keep this as 0 since they didn't actually spend money on this transaction
+          }
+        }
+
+        // Get available currencies (only currencies that have been used)
+        final availableCurrencies = monthTotalsByCurrency.keys.toList()..sort();
+        
+        // Set default currency if current selection is not available
+        if (availableCurrencies.isNotEmpty && !availableCurrencies.contains(_selectedCurrency)) {
+          _selectedCurrency = availableCurrencies.contains('MYR') ? 'MYR' : availableCurrencies.first;
+        }
+
+        // Get data for selected currency
+        final monthTotals = monthTotalsByCurrency[_selectedCurrency] ?? List<double>.filled(12, 0);
+        final maxAmount = monthTotals.isEmpty ? 0.0 : monthTotals.reduce((a, b) => a > b ? a : b);
+        
+        final bars = List<BarChartGroupData>.generate(12, (i) {
+          final isCurrentMonth =
+              i == DateTime.now().month - 1 && _selectedYear == DateTime.now().year;
+          final hasData = monthTotals[i] > 0;
+          return BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: monthTotals[i],
+                color: isCurrentMonth
+                    ? accentDark
+                    : hasData
+                        ? accent
+                        : Colors.grey[200],
+                width: 16,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                ),
+              ),
+            ],
+          );
+        });
+
+        // ── UI ──
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _summaryCardsByCurrency(
+                  accent, 
+                  accentDark, 
+                  totalSpentByCurrency, 
+                  yourShareByCurrency,
+                  formatWithOriginalCurrency
+                ),
+                const SizedBox(height: 16),
+                _legend(accent, accentDark),
+                const SizedBox(height: 24),
+                _chartCard(
+                  bars, 
+                  maxAmount, 
+                  _selectedCurrency, 
+                  formatWithOriginalCurrency,
+                  availableCurrencies,
+                  accent
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryView(
+    BuildContext context, 
+    Color accent, 
+    Color accentDark, 
+    String Function(double, String) formatWithOriginalCurrency
+  ) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.ownerUid)
+          .collection('activities')
+          .doc(widget.activityId)
+          .collection('transactions')
+          .orderBy('timestamp')
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return _centerMessage('Something went wrong\n${snap.error}');
+        }
+        if (snap.connectionState == ConnectionState.waiting) {
+          return _loading(accent);
+        }
+
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return _centerMessage('No transactions yet');
+        }
+
+        // ── AGGREGATE BY CATEGORY AND CURRENCY ──
+        final categoryTotalsByCurrency = <String, Map<String, double>>{};
+        final totalSpentByCurrency = <String, double>{};
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+
+        // Define categories
+        final categories = [
+          'Food', 
+          'Beverage', 
+          'Entertainment', 
+          'Transportation', 
+          'Shopping', 
+          'Travel', 
+          'Utilities', 
+          'Other'
+        ];
+
+        // Initialize category maps for each currency
+        for (final d in docs) {
+          final data = d.data() as Map<String, dynamic>;
+          if (data['is_settlement'] == true) continue;
+
+          // Parse date (Timestamp or String)
+          final rawDate = data['date'] ?? data['timestamp'];
+          DateTime? txDate;
+          if (rawDate is Timestamp) {
+            txDate = rawDate.toDate();
+          } else if (rawDate is String) {
+            txDate = DateTime.tryParse(rawDate) ??
+                     DateFormat('MMM dd, yyyy').tryParse(rawDate);
+          }
+          if (txDate == null || txDate.year != _selectedYear) continue;
+
+          // Use transaction's original currency
+          final rawAmt = (data['amount'] ?? 0).toDouble();
+          final currencyCode = data['currency'] ?? 'USD';
+          final category = data['category'] ?? 'Other';
+
+          // Initialize currency tracking if not exists
+          if (!categoryTotalsByCurrency.containsKey(currencyCode)) {
+            categoryTotalsByCurrency[currencyCode] = {};
+            for (final cat in categories) {
+              categoryTotalsByCurrency[currencyCode]![cat] = 0.0;
+            }
+            totalSpentByCurrency[currencyCode] = 0;
+          }
+          
+          // Add to category total
+          categoryTotalsByCurrency[currencyCode]![category] = 
+              (categoryTotalsByCurrency[currencyCode]![category] ?? 0) + rawAmt;
+          
+          // Add to total spent
+          totalSpentByCurrency[currencyCode] = 
+              (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
+        }
+
+        // Get available currencies (only currencies that have been used)
+        final availableCurrencies = categoryTotalsByCurrency.keys.toList()..sort();
+        
+        // Set default currency if current selection is not available
+        if (availableCurrencies.isNotEmpty && !availableCurrencies.contains(_selectedCurrency)) {
+          _selectedCurrency = availableCurrencies.contains('MYR') ? 'MYR' : availableCurrencies.first;
+        }
+
+        // Get data for selected currency
+        final categoryTotals = categoryTotalsByCurrency[_selectedCurrency] ?? {};
+        
+        // Filter out categories with zero spending
+        final nonZeroCategories = categories.where((cat) => 
+            (categoryTotals[cat] ?? 0) > 0).toList();
+        
+        // Prepare data for pie chart
+        final pieChartSections = <PieChartSectionData>[];
+        final categoryColors = {
+          'Food': Colors.red,
+          'Beverage': Colors.blue,
+          'Entertainment': Colors.purple,
+          'Transportation': Colors.orange,
+          'Shopping': Colors.green,
+          'Travel': Colors.teal,
+          'Utilities': Colors.amber,
+          'Other': Colors.grey,
+        };
+        
+        double totalAmount = 0;
+        for (final cat in nonZeroCategories) {
+          totalAmount += categoryTotals[cat] ?? 0;
+        }
+        
+        for (int i = 0; i < nonZeroCategories.length; i++) {
+          final category = nonZeroCategories[i];
+          final amount = categoryTotals[category] ?? 0;
+          final percentage = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
+          
+          pieChartSections.add(
+            PieChartSectionData(
+              color: categoryColors[category] ?? Colors.grey,
+              value: amount,
+              title: '${percentage.toStringAsFixed(1)}%',
+              radius: 100,
+              titleStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          );
+        }
+
+        // ── UI ──
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _summaryCardsByCurrency(
+                  accent, 
+                  accentDark, 
+                  totalSpentByCurrency, 
+                  {}, // No personal share in category view
+                  formatWithOriginalCurrency
+                ),
+                const SizedBox(height: 24),
+                _buildCategoryPieChart(
+                  pieChartSections, 
+                  nonZeroCategories, 
+                  categoryTotals, 
+                  categoryColors,
+                  _selectedCurrency,
+                  formatWithOriginalCurrency,
+                  availableCurrencies,
+                  accent
+                ),
+                const SizedBox(height: 24),
+                _buildCategoryList(
+                  nonZeroCategories,
+                  categoryTotals,
+                  categoryColors,
+                  _selectedCurrency,
+                  formatWithOriginalCurrency
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryPieChart(
+    List<PieChartSectionData> sections,
+    List<String> categories,
+    Map<String, double> categoryTotals,
+    Map<String, Color> categoryColors,
+    String selectedCurrency,
+    String Function(double, String) formatWithOriginalCurrency,
+    List<String> availableCurrencies,
+    Color accent
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pie_chart, size: 24, color: Color(0xFFF5A9C1)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Spending by Category',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)
+                ),
+              ),
+              // Currency Selector
+              if (availableCurrencies.length > 1)
+                _buildCurrencySelector(availableCurrencies, accent),
+            ],
+          ),
+          const SizedBox(height: 20),
+          sections.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'No categorized expenses yet',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                )
+              : SizedBox(
+                  height: 300,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 40,
+                      sections: sections,
+                      pieTouchData: PieTouchData(
+                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                          // Handle touch events if needed
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryList(
+    List<String> categories,
+    Map<String, double> categoryTotals,
+    Map<String, Color> categoryColors,
+    String selectedCurrency,
+    String Function(double, String) formatWithOriginalCurrency
+  ) {
+    // Sort categories by amount (descending)
+    categories.sort((a, b) => 
+        (categoryTotals[b] ?? 0).compareTo(categoryTotals[a] ?? 0));
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Category Breakdown',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          ...categories.map((category) {
+            final amount = categoryTotals[category] ?? 0;
+            final color = categoryColors[category] ?? Colors.grey;
+            
+            // Get icon based on category
+            IconData categoryIcon;
+            switch (category) {
+              case 'Food':
+                categoryIcon = Icons.restaurant;
+                break;
+              case 'Beverage':
+                categoryIcon = Icons.local_drink;
+                break;
+              case 'Entertainment':
+                categoryIcon = Icons.movie;
+                break;
+              case 'Transportation':
+                categoryIcon = Icons.directions_car;
+                break;
+              case 'Shopping':
+                categoryIcon = Icons.shopping_bag;
+                break;
+              case 'Travel':
+                categoryIcon = Icons.flight;
+                break;
+              case 'Utilities':
+                categoryIcon = Icons.power;
+                break;
+              default:
+                categoryIcon = Icons.category;
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(categoryIcon, color: color),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      category,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    formatWithOriginalCurrency(amount, selectedCurrency),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
 }
