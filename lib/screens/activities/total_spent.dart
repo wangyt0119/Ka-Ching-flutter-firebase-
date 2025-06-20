@@ -587,52 +587,36 @@ class _TotalSpentState extends State<TotalSpent> with SingleTickerProviderStateM
           // Use transaction's original currency
           final rawAmt = (data['amount'] ?? 0).toDouble();
           final currencyCode = data['currency'] ?? 'USD';
-          final splitMethod = data['split'] ?? 'equally';
           final paidBy = data['paid_by'] ?? '';
-          final participants = List<String>.from(data['participants'] ?? []);
-
+          final paidById = data['paid_by_id'];
+          
           // Initialize currency tracking if not exists
           if (!monthTotalsByCurrency.containsKey(currencyCode)) {
             monthTotalsByCurrency[currencyCode] = List<double>.filled(12, 0);
             totalSpentByCurrency[currencyCode] = 0;
             yourShareByCurrency[currencyCode] = 0;
           }
-
-          final mIndex = txDate.month - 1; // 0‑based
           
-          // Add to total spent (total amount of the transaction)
-          monthTotalsByCurrency[currencyCode]![mIndex] += rawAmt;
-          totalSpentByCurrency[currencyCode] = (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
-          
-          // Calculate user's share based on split method
-          double userShare = 0.0;
-          
-          if (splitMethod == 'equally') {
-            // Equal split among participants
-            if (participants.isNotEmpty) {
-              userShare = rawAmt / participants.length;
-            }
-          } else if (splitMethod == 'unequally') {
-            // Use custom shares
-            final shares = Map<String, dynamic>.from(data['shares'] ?? {});
-            userShare = (shares['You'] ?? 0).toDouble();
-          } else if (splitMethod == 'percentage') {
-            // Use percentage shares
-            final shares = Map<String, dynamic>.from(data['shares'] ?? {});
-            final percentage = (shares['You'] ?? 0).toDouble();
-            userShare = rawAmt * percentage / 100;
+          // Add to monthly total
+          if (txDate != null) {
+            final monthIndex = txDate.month - 1;
+            monthTotalsByCurrency[currencyCode]![monthIndex] += rawAmt;
           }
           
-          // If current user paid for this transaction, add the full amount to their spending
-          // Otherwise, add only their share
-          if (paidBy == 'You' || paidBy == uid) {
-            // User paid for this transaction, so they spent the full amount
-            yourShareByCurrency[currencyCode] = (yourShareByCurrency[currencyCode] ?? 0) + rawAmt;
-          } else {
-            // User didn't pay, but they owe their share
-            // This represents what they should pay back, not what they spent
-            // For "My Spending" we might want to show what they actually paid out
-            // Keep this as 0 since they didn't actually spend money on this transaction
+          // Add to total spent
+          totalSpentByCurrency[currencyCode] = 
+              (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
+          
+          // Check if current user paid for this transaction
+          final isCurrentUserPayer = 
+              (paidById != null && paidById == uid) || 
+              paidBy == FirebaseAuth.instance.currentUser?.displayName || 
+              paidBy == FirebaseAuth.instance.currentUser?.email;
+              
+          // If current user paid for this transaction, add to their payments
+          if (isCurrentUserPayer) {
+            yourShareByCurrency[currencyCode] = 
+                (yourShareByCurrency[currencyCode] ?? 0) + rawAmt;
           }
         }
 
@@ -849,14 +833,7 @@ class _TotalSpentState extends State<TotalSpent> with SingleTickerProviderStateM
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _summaryCardsByCurrency(
-                  accent, 
-                  accentDark, 
-                  totalSpentByCurrency, 
-                  {}, // No personal share in category view
-                  formatWithOriginalCurrency
-                ),
-                const SizedBox(height: 24),
+                // Removed the summary cards
                 _buildCategoryPieChart(
                   pieChartSections, 
                   nonZeroCategories, 
