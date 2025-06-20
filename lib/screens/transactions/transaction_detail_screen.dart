@@ -32,6 +32,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Map<String, dynamic>? _transaction;
   Map<String, dynamic>? _activity;
   List<Map<String, dynamic>> _participants = [];
+  bool _wasEdited = false;
 
   @override
   void initState() {
@@ -183,6 +184,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           activityId: widget.activityId!,
           activityName: _activity?['name'] ?? 'Activity',
           transaction: _transaction!,
+          ownerId: widget.ownerId,
         ),
       ),
     );
@@ -191,6 +193,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (result == true) {
       setState(() {
         _isLoading = true;
+        _wasEdited = true;
       });
       await _loadTransactionData();
     }
@@ -206,6 +209,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         backgroundColor: const Color(0xFFB19CD9),
         foregroundColor: Colors.white,
         title: const Text('Transaction Details'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Pass the result back if transaction was edited
+            Navigator.pop(context, _wasEdited);
+          },
+        ),
         actions: [
           if (_transaction != null)
             IconButton(
@@ -271,7 +281,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      // Original value
+                                      // Original currency (bigger)
                                       Text(
                                         () {
                                           final originalAmount = _transaction!['amount'] ?? 0.0;
@@ -279,11 +289,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           return '$originalCurrency ${originalAmount.toStringAsFixed(2)}';
                                         }(),
                                         style: const TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.grey,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFF5A9C1),
                                         ),
                                       ),
-                                      // Converted value
+                                      // Converted currency (smaller)
                                       Text(
                                         () {
                                           final currencyProvider = Provider.of<CurrencyProvider>(context);
@@ -297,9 +308,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           return currencyProvider.formatAmount(converted);
                                         }(),
                                         style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFF5A9C1),
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ],
@@ -381,12 +392,28 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                         isPayer ? 'You paid' : (userShare > 0 ? 'You get back' : 'You owe'),
                                         style: const TextStyle(fontWeight: FontWeight.bold),
                                       ),
-                                      Text(
-                                        currencyProvider.formatAmount(convertedShare.abs()),
-                                        style: TextStyle(
-                                          color: userShare >= 0 ? Colors.green : Colors.red,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          // Original currency (bigger)
+                                          Text(
+                                            '${originalCurrency} ${userShare.abs().toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: userShare >= 0 ? Colors.green : Colors.red,
+                                            ),
+                                          ),
+                                          // Converted currency (smaller)
+                                          Text(
+                                            currencyProvider.formatAmount(convertedShare.abs()),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   );
@@ -509,19 +536,41 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(participant['name']),
-                    Text(
-                      () {
-                        final currencyProvider = Provider.of<CurrencyProvider>(context);
-                        final originalAmount = participant['share'] ?? 0.0;
-                        final originalCurrency = _transaction!['currency'] ?? 'USD';
-                        final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
-                          (c) => c.code == originalCurrency,
-                          orElse: () => currencyProvider.selectedCurrency,
-                        );
-                        final converted = currencyProvider.convertToSelectedCurrency(originalAmount.toDouble(), fromCurrency);
-                        return currencyProvider.formatAmount(converted);
-                      }(),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // Original currency (bigger)
+                        Text(
+                          () {
+                            final originalAmount = participant['share'] ?? 0.0;
+                            final originalCurrency = _transaction!['currency'] ?? 'USD';
+                            return '$originalCurrency ${originalAmount.toStringAsFixed(2)}';
+                          }(),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        // Converted currency (smaller)
+                        Text(
+                          () {
+                            final currencyProvider = Provider.of<CurrencyProvider>(context);
+                            final originalAmount = participant['share'] ?? 0.0;
+                            final originalCurrency = _transaction!['currency'] ?? 'USD';
+                            final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
+                              (c) => c.code == originalCurrency,
+                              orElse: () => currencyProvider.selectedCurrency,
+                            );
+                            final converted = currencyProvider.convertToSelectedCurrency(originalAmount.toDouble(), fromCurrency);
+                            return currencyProvider.formatAmount(converted);
+                          }(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

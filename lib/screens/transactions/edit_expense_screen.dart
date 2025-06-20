@@ -12,12 +12,14 @@ class EditExpenseScreen extends StatefulWidget {
   final String activityId;
   final String activityName;
   final Map<String, dynamic> transaction;
+  final String? ownerId;
 
   const EditExpenseScreen({
     super.key,
     required this.activityId,
     required this.activityName,
     required this.transaction,
+    this.ownerId,
   });
 
   @override
@@ -187,17 +189,29 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
         final currentUserEmail = userData?['email'] ?? currentUser.email ?? '';
         final currentUserDisplayName = userData?['displayName'] ?? currentUser.displayName ?? '';
         
-        // Get activity members
-        final activityDoc = await _firestore
-            .collection('users')
-            .doc(currentUser.uid)
-            .collection('activities')
-            .doc(selectedActivityId)
-            .get();
+        // Determine the correct activity reference based on whether user is creator or participant
+        DocumentReference activityRef;
+        if (widget.ownerId != null) {
+          // User is a participant, not the creator
+          activityRef = _firestore
+              .collection('users')
+              .doc(widget.ownerId)
+              .collection('activities')
+              .doc(selectedActivityId);
+        } else {
+          // User is the creator
+          activityRef = _firestore
+              .collection('users')
+              .doc(currentUser.uid)
+              .collection('activities')
+              .doc(selectedActivityId);
+        }
+        
+        final activityDoc = await activityRef.get();
         
         if (activityDoc.exists) {
-          final activityData = activityDoc.data();
-          if (activityData != null && activityData['members'] != null) {
+          final activityData = activityDoc.data() as Map<String, dynamic>;
+          if (activityData['members'] != null) {
             final members = List<Map<String, dynamic>>.from(activityData['members']);
             
             // Extract member names, ensuring current user is represented as "You"
@@ -419,11 +433,25 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
         expense['shares'] = shares;
       }
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('activities')
-          .doc(selectedActivityId)
+      // Determine the correct activity reference based on whether user is creator or participant
+      DocumentReference activityRef;
+      if (widget.ownerId != null) {
+        // User is a participant, not the creator
+        activityRef = _firestore
+            .collection('users')
+            .doc(widget.ownerId)
+            .collection('activities')
+            .doc(selectedActivityId);
+      } else {
+        // User is the creator
+        activityRef = _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('activities')
+            .doc(selectedActivityId);
+      }
+
+      await activityRef
           .collection('transactions')
           .doc(widget.transaction['id'])
           .update(expense);
@@ -897,10 +925,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
               children: [
                 const Text('Difference:', style: TextStyle(fontWeight: FontWeight.bold)),
                 Text(
-                  '$selectedCurrency ${((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).toStringAsFixed(2)}',
+                  '$selectedCurrency ${((double.parse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).toStringAsFixed(2)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: ((double.tryParse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).abs() < 0.01
+                    color: ((double.parse(_amountController.text) ?? 0.0) - customShares.values.fold(0.0, (sum, amount) => sum + amount)).abs() < 0.01
                         ? Colors.green
                         : Colors.red,
                   ),

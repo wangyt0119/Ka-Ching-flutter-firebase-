@@ -302,7 +302,7 @@ class _UserHomePageState extends State<UserHomePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "Balance Summary",
+                        "Activities Summary",
                         style: Theme.of(
                           context,
                         ).textTheme.titleMedium?.copyWith(
@@ -337,33 +337,47 @@ class _UserHomePageState extends State<UserHomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.hiking,
+                                color: AppTheme.primaryColor,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              "You owe",
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.secondary,
-                                fontSize: 12,
+                              "${activities.length}",
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryColor,
                               ),
                             ),
                             Text(
-                              _formatAmount(youOwe),
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              "Total Activities",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontSize: 14,
                               ),
                             ),
                           ],
                         ),
                       ),
                       Container(
-                        height: 40,
+                        height: 80,
                         width: 1,
                         color: AppTheme.dividerColor,
                       ),
@@ -371,19 +385,33 @@ class _UserHomePageState extends State<UserHomePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.receipt,
+                                color: AppTheme.accentColor,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              "You are owed",
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.secondary,
-                                fontSize: 12,
+                              "${activities.where((a) => a['isCreator'] == true).length}",
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.accentColor,
                               ),
                             ),
                             Text(
-                              _formatAmount(youAreOwed),
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              "Created by You",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontSize: 14,
                               ),
                             ),
                           ],
@@ -392,41 +420,21 @@ class _UserHomePageState extends State<UserHomePage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Divider(
-                    color: Color.fromARGB(255, 228, 207, 232),
-                    thickness: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Total balance",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      Text(
-                        _formatAmount(totalBalance),
-                        style: TextStyle(
-                          color: totalBalance >= 0 ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 35),
                     ),
-                    onPressed: _showSettleUpDialog,
-                    child: const Text("Settle Up"),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddActivityScreen(),
+                        ),
+                      ).then((_) => _loadUserData());
+                    },
+                    child: const Text("Create New Activity"),
                   ),
                 ],
               ),
@@ -992,3 +1000,4 @@ class _UserHomePageState extends State<UserHomePage> {
     );
   }
 }
+
