@@ -133,9 +133,44 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     final paidById = transaction['paid_by_id'];
     final paidBy = transaction['paid_by'] ?? '';
-    final isCurrentUserPayer = paidById != null && paidById == user?.uid;
+    
+    // Check if current user is the payer
+    final isCurrentUserPayer = paidById == user?.uid || 
+                              paidBy == user?.displayName || 
+                              paidBy == user?.email;
+    
+    // Display logic
     final amount = transaction['amount']?.toDouble() ?? 0.0;
     final date = transaction['date'] ?? '';
+    final category = transaction['category'] ?? 'Other';
+
+    // Get icon based on category
+    IconData categoryIcon;
+    switch (category) {
+      case 'Food':
+        categoryIcon = Icons.restaurant;
+        break;
+      case 'Beverage':
+        categoryIcon = Icons.local_drink;
+        break;
+      case 'Entertainment':
+        categoryIcon = Icons.movie;
+        break;
+      case 'Transportation':
+        categoryIcon = Icons.directions_car;
+        break;
+      case 'Shopping':
+        categoryIcon = Icons.shopping_bag;
+        break;
+      case 'Travel':
+        categoryIcon = Icons.flight;
+        break;
+      case 'Utilities':
+        categoryIcon = Icons.power;
+        break;
+      default:
+        categoryIcon = Icons.category;
+    }
 
     final originalCurrency = transaction['currency'] ?? 'USD';
     final currencyProvider = Provider.of<CurrencyProvider>(context);
@@ -151,94 +186,87 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () async {
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TransactionDetailScreen(
-              transactionId: transaction['id'],
-              activityId: widget.activityId,
-              ownerId: widget.ownerId,
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TransactionDetailScreen(
+                transactionId: transaction['id'],
+                activityId: widget.activityId,
+                ownerId: widget.ownerId,
+              ),
             ),
-          ),
-        );
+          );
 
-        if (result == true) {
-          await _loadActivityData();
-        }
-      },
-
+          if (result == true) {
+            await _loadActivityData();
+          }
+        },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  categoryIcon,
+                  color: Colors.blue,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      transaction['title'] ?? 'Untitled',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'Paid by ${isCurrentUserPayer ? 'You' : paidBy}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.receipt,
-                      color: AppTheme.primaryColor,
-                      size: 20,
+                  // Original currency (bigger)
+                  Text(
+                    '$originalCurrency ${amount.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          transaction['title'] ?? 'Untitled',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'Paid by ${isCurrentUserPayer ? 'you' : paidBy}',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                  // Converted currency (smaller)
+                  Text(
+                    displayAmount,
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Original currency (bigger)
-                      Text(
-                        '$originalCurrency ${amount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      // Converted currency (smaller)
-                      Text(
-                        displayAmount,
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        date,
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 4),
+                  Text(
+                    date,
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -1335,65 +1363,6 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     }
   }
 
-  // Widget _buildActivitySummary() {
-  //   if (_activity == null) return const SizedBox();
-  //   final currencyProvider = Provider.of<CurrencyProvider>(context);
-  //   final selectedCurrency = currencyProvider.selectedCurrency;
-
-  //   // Use the same logic as database storage: convert to USD first, then to display currency
-  //   final baseCurrencyObj = currencyProvider.availableCurrencies.firstWhere(
-  //     (c) => c.code == 'USD',
-  //     orElse: () => currencyProvider.selectedCurrency,
-  //   );
-
-  //   // Calculate total spent in USD base currency (excluding settlements)
-  //   double totalAmountInUSD = 0.0;
-  //   for (var transaction in _transactions) {
-  //     // Skip settlement transactions when calculating total spent
-  //     if (transaction['is_settlement'] == true) {
-  //       continue;
-  //     }
-
-  //     final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
-  //     final originalCurrency = transaction['currency'] ?? 'USD';
-  //     final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
-  //       (c) => c.code == originalCurrency,
-  //       orElse: () => baseCurrencyObj,
-  //     );
-  //     // Convert to USD base currency first
-  //     final convertedAmountInUSD = currencyProvider.convertCurrency(originalAmount, fromCurrency, baseCurrencyObj);
-  //     totalAmountInUSD += convertedAmountInUSD;
-  //   }
-
-  //   // Now convert from USD to selected display currency
-  //   final totalAmountInDisplayCurrency = currencyProvider.convertCurrency(totalAmountInUSD, baseCurrencyObj, selectedCurrency);
-  //   final displayTotal = currencyProvider.formatAmount(totalAmountInDisplayCurrency);
-  //   return Card(
-  //     margin: const EdgeInsets.only(bottom: 16),
-  //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-  //     child: Padding(
-  //       padding: const EdgeInsets.all(16),
-  //       child: Column(
-  //         crossAxisAlignment: CrossAxisAlignment.start,
-  //         children: [
-  //           Text(
-  //             _activity!['name'] ?? 'Activity',
-  //             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-  //           ),
-  //           const SizedBox(height: 8),
-  //           Row(
-  //             children: [
-  //               const Icon(Icons.attach_money, size: 16, color: Colors.grey),
-  //               const SizedBox(width: 8),
-  //               Text('Total: $displayTotal'),
-  //             ],
-  //           ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
-
   @override
   Widget build(BuildContext context) {
     final currencyProvider = Provider.of<CurrencyProvider>(context);
@@ -1569,12 +1538,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                     ownerId: widget.ownerId,
                                   ),
                                 ),
-                              ).then((result) {
-                                // If result is true, reload activity data
-                                if (result == true) {
-                                  _loadActivityData();
-                                }
-                              });
+                              ).then((_) => _loadActivityData());
                             },
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('Add'),
@@ -1616,12 +1580,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 ownerId: widget.ownerId,
               ),
             ),
-          ).then((result) {
-            // If result is true, reload activity data
-            if (result == true) {
-              _loadActivityData();
-            }
-          });
+          ).then((_) => _loadActivityData());
         },
         icon: const Icon(Icons.add),
         label: const Text('Add Expense'),

@@ -313,7 +313,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       'currency': selectedCurrency,
       'date': DateFormat.yMMMd().format(selectedDate),
       'description': _descriptionController.text.trim(),
-      'paid_by': paidBy == 'You' ? _auth.currentUser!.displayName ?? _auth.currentUser!.email : paidBy,
+      // Store the actual user name/email, not "You"
+      'paid_by': paidBy == 'You' ? (_auth.currentUser!.displayName ?? _auth.currentUser!.email) : paidBy,
+      // Always store the user ID for the payer
       'paid_by_id': paidBy == 'You' ? _auth.currentUser!.uid : null,
       'split': splitMethod,
       'category': selectedCategory, // Add category to the expense
