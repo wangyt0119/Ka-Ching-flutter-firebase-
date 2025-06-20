@@ -46,6 +46,19 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String splitMethod = 'equally';
   String? paidBy = 'You';
 
+  // Category selection
+  String selectedCategory = 'Food';
+  final List<String> categories = [
+    'Food', 
+    'Beverage', 
+    'Entertainment', 
+    'Transportation', 
+    'Shopping', 
+    'Travel', 
+    'Utilities', 
+    'Other'
+  ];
+
   List<String> allParticipants = [];
   Map<String, bool> selectedParticipants = {};
 
@@ -289,15 +302,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         );
         return;
       }
-    } else if (splitMethod == 'percentage') {
-      final totalPercentage = customShares.values.fold(0.0, (sum, amount) => sum + amount);
-      
-      if ((totalPercentage - 100.0).abs() > 0.1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
-        );
-        return;
-      }
     }
 
     final user = _auth.currentUser!;
@@ -311,6 +315,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       'description': _descriptionController.text.trim(),
       'paid_by': paidBy,
       'split': splitMethod,
+      'category': selectedCategory, // Add category to the expense
       'participants': selectedParticipants.entries
           .where((entry) => entry.value)
           .map((entry) => entry.key)
@@ -573,36 +578,75 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              
+              // Category Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Category",
+                  prefixIcon: const Icon(Icons.category, color: Color(0xFFB19CD9)),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                value: selectedCategory,
+                items: categories.map((category) {
+                  return DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCategory = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              
               Container(
-  decoration: BoxDecoration(
-    color: Theme.of(context).cardColor,
-    border: Border.all(color: Color(0xFFB19CD9)),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      ListTile(
-        leading: const Icon(
-          Icons.receipt_long,
-          color: Color(0xFFB19CD9),
-        ),
-        title: const Text("Tap to add a receipt image"),
-        subtitle: _receiptImage != null ? const Text("Image selected") : null,
-        onTap: _pickImage,
-      ),
-      if (_base64Image != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Image.memory(
-            base64Decode(_base64Image!),
-            height: 200,
-            fit: BoxFit.cover,
-          ),
-        ),
-    ],
-  ),
-),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border.all(color: Color(0xFFB19CD9)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      leading: const Icon(
+                        Icons.receipt_long,
+                        color: Color(0xFFB19CD9),
+                      ),
+                      title: const Text("Tap to add a receipt image"),
+                      subtitle: _receiptImage != null ? const Text("Image selected") : null,
+                      onTap: _pickImage,
+                    ),
+                    if (_base64Image != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Image.memory(
+                          base64Decode(_base64Image!),
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 24),
               const Text(

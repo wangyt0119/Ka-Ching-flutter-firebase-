@@ -133,6 +133,35 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
     final isCurrentUserPayer = transaction['paid_by'] == 'You';
     final amount = transaction['amount']?.toDouble() ?? 0.0;
     final date = transaction['date'] ?? '';
+    final category = transaction['category'] ?? 'Other';
+
+    // Get icon based on category
+    IconData categoryIcon;
+    switch (category) {
+      case 'Food':
+        categoryIcon = Icons.restaurant;
+        break;
+      case 'Beverage':
+        categoryIcon = Icons.local_drink;
+        break;
+      case 'Entertainment':
+        categoryIcon = Icons.movie;
+        break;
+      case 'Transportation':
+        categoryIcon = Icons.directions_car;
+        break;
+      case 'Shopping':
+        categoryIcon = Icons.shopping_bag;
+        break;
+      case 'Travel':
+        categoryIcon = Icons.flight;
+        break;
+      case 'Utilities':
+        categoryIcon = Icons.power;
+        break;
+      default:
+        categoryIcon = Icons.category;
+    }
 
     final originalCurrency = transaction['currency'] ?? 'USD';
     final currencyProvider = Provider.of<CurrencyProvider>(context);
@@ -148,94 +177,87 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () async {
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TransactionDetailScreen(
-              transactionId: transaction['id'],
-              activityId: widget.activityId,
-              ownerId: widget.ownerId,
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TransactionDetailScreen(
+                transactionId: transaction['id'],
+                activityId: widget.activityId,
+                ownerId: widget.ownerId,
+              ),
             ),
-          ),
-        );
+          );
 
-        if (result == true) {
-          await _loadActivityData();
-        }
-      },
-
+          if (result == true) {
+            await _loadActivityData();
+          }
+        },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  categoryIcon,
+                  color: Colors.blue,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      transaction['title'] ?? 'Untitled',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'Paid by ${isCurrentUserPayer ? 'you' : transaction['paid_by']}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.receipt,
-                      color: AppTheme.primaryColor,
-                      size: 20,
+                  // Original currency (bigger)
+                  Text(
+                    '$originalCurrency ${amount.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          transaction['title'] ?? 'Untitled',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'Paid by ${isCurrentUserPayer ? 'you' : transaction['paid_by']}',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                  // Converted currency (smaller)
+                  Text(
+                    displayAmount,
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Original currency (bigger)
-                      Text(
-                        '$originalCurrency ${amount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      // Converted currency (smaller)
-                      Text(
-                        displayAmount,
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        date,
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 4),
+                  Text(
+                    date,
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),

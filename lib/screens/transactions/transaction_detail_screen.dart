@@ -208,7 +208,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFB19CD9),
         foregroundColor: Colors.white,
-        title: const Text('Transaction Details'),
+        title: Text(_transaction != null 
+            ? '${_transaction!['category'] ?? 'Transaction'} Details' 
+            : 'Transaction Details'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -331,6 +333,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   const Icon(Icons.person, size: 16, color: Colors.grey),
                                   const SizedBox(width: 8),
                                   Text('Paid by ${_transaction!['paid_by'] ?? 'Unknown'}'),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Add category row
+                              Row(
+                                children: [
+                                  const Icon(Icons.category, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_transaction!['category'] ?? 'Uncategorized'),
                                 ],
                               ),
                               if (_transaction!['description'] != null && _transaction!['description'].toString().isNotEmpty)
@@ -510,6 +521,36 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         splitMethodText = 'Split equally';
     }
     
+    // Get category and assign appropriate icon
+    final category = _transaction!['category'] ?? 'Other';
+    IconData categoryIcon;
+    
+    switch (category) {
+      case 'Food':
+        categoryIcon = Icons.restaurant;
+        break;
+      case 'Beverage':
+        categoryIcon = Icons.local_drink;
+        break;
+      case 'Entertainment':
+        categoryIcon = Icons.movie;
+        break;
+      case 'Transportation':
+        categoryIcon = Icons.directions_car;
+        break;
+      case 'Shopping':
+        categoryIcon = Icons.shopping_bag;
+        break;
+      case 'Travel':
+        categoryIcon = Icons.flight;
+        break;
+      case 'Utilities':
+        categoryIcon = Icons.power;
+        break;
+      default:
+        categoryIcon = Icons.category;
+    }
+    
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -519,12 +560,41 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              splitMethodText,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+            // Add category with icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    categoryIcon,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  category,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.people, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  splitMethodText,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             
