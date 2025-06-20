@@ -309,7 +309,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       'currency': selectedCurrency,
       'date': DateFormat.yMMMd().format(selectedDate),
       'description': _descriptionController.text.trim(),
-      'paid_by': paidBy,
+      'paid_by': paidBy == 'You' ? _auth.currentUser!.displayName ?? _auth.currentUser!.email : paidBy,
+      'paid_by_id': paidBy == 'You' ? _auth.currentUser!.uid : null,
       'split': splitMethod,
       'participants': selectedParticipants.entries
           .where((entry) => entry.value)
@@ -363,7 +364,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       );
     }
 
-    Navigator.pop(context);
+    // Return true to indicate successful addition
+    Navigator.pop(context, true);
   }
 
   @override

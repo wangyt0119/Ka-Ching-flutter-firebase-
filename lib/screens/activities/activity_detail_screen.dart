@@ -130,7 +130,10 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
   }
 
   Widget _buildTransactionItem(Map<String, dynamic> transaction) {
-    final isCurrentUserPayer = transaction['paid_by'] == 'You';
+    final user = FirebaseAuth.instance.currentUser;
+    final paidById = transaction['paid_by_id'];
+    final paidBy = transaction['paid_by'] ?? '';
+    final isCurrentUserPayer = paidById != null && paidById == user?.uid;
     final amount = transaction['amount']?.toDouble() ?? 0.0;
     final date = transaction['date'] ?? '';
 
@@ -198,7 +201,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                           ),
                         ),
                         Text(
-                          'Paid by ${isCurrentUserPayer ? 'you' : transaction['paid_by']}',
+                          'Paid by ${isCurrentUserPayer ? 'you' : paidBy}',
                           style: const TextStyle(
                             color: AppTheme.textSecondary,
                             fontSize: 14,
@@ -1566,7 +1569,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                                     ownerId: widget.ownerId,
                                   ),
                                 ),
-                              ).then((_) => _loadActivityData());
+                              ).then((result) {
+                                // If result is true, reload activity data
+                                if (result == true) {
+                                  _loadActivityData();
+                                }
+                              });
                             },
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('Add'),
@@ -1608,7 +1616,12 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                 ownerId: widget.ownerId,
               ),
             ),
-          ).then((_) => _loadActivityData());
+          ).then((result) {
+            // If result is true, reload activity data
+            if (result == true) {
+              _loadActivityData();
+            }
+          });
         },
         icon: const Icon(Icons.add),
         label: const Text('Add Expense'),
