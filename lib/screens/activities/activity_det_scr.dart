@@ -16,6 +16,7 @@ import '../transactions/add_expense_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
 import 'edit_activity_screen.dart';
 import 'total_spent.dart';
+import 'settleup.dart';
 
 class ActivityDetailScreen extends StatefulWidget {
   final String activityId;
@@ -237,6 +238,20 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
           ...youOwe,
           ...peopleOweYou,
         ],
+      ),
+    );
+  }
+
+  Widget _buildSettleUpButton() {
+    if (_activity == null) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SettleUpButton(
+        activity: _activity!,
+        activityId: widget.activityId,
+        ownerId: widget.ownerId,
+        refreshActivity: _loadActivityData,
       ),
     );
   }
@@ -485,6 +500,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                 thickness: 1.5,
                               ),
                               _buildSummaryCard(),
+                              _buildSettleUpButton(),
                             ],
                           ),
                         ),

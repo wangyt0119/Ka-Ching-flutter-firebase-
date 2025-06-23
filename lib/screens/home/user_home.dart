@@ -522,25 +522,100 @@ class _UserHomePageState extends State<UserHomePage> {
             padding: const EdgeInsets.only(top: 4.0),
             child: Text(createdAt),
           ),
-          trailing: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                _formatAmount(total),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+          trailing: FutureBuilder<Map<String, double>>(
+            future: _calculateTotalSpentByCurrency(activity['ownerId'], activity['id']),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Loading...",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              
+              if (snapshot.hasError) {
+                debugPrint('Error in FutureBuilder: ${snapshot.error}');
+                return Text(
+                  "Error",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                );
+              }
+              
+              final totalSpentByCurrency = snapshot.data ?? {};
+              final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+              
+              if (totalSpentByCurrency.isEmpty) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "RM0.00",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      "No transactions",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              
+              // Show up to 2 currencies
+              final entries = totalSpentByCurrency.entries.toList();
+              
+              return Container(
+                width: 120, // Fixed width to prevent overflow
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // First currency
+                    if (entries.isNotEmpty) 
+                      _buildCurrencyText(entries[0].key, entries[0].value, currencyProvider, 14),
+                    
+                    // Second currency (if exists)
+                    if (entries.length > 1)
+                      _buildCurrencyText(entries[1].key, entries[1].value, currencyProvider, 12),
+                    
+                    // If more than 2 currencies, show a hint
+                    if (entries.length > 2)
+                      Text(
+                        "See details",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-              Text(
-                "Total spent",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-            ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 12), // More space before divider
@@ -958,8 +1033,72 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 }
 
+// Update the method to include debug logging
+Future<Map<String, double>> _calculateTotalSpentByCurrency(String ownerId, String activityId) async {
+  final totalSpentByCurrency = <String, double>{};
+  
+  try {
+    debugPrint('Fetching transactions for activity: $activityId, owner: $ownerId');
+    
+    final transactionsSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('activities')
+        .doc(activityId)
+        .collection('transactions')
+        .get();
+    
+    debugPrint('Found ${transactionsSnapshot.docs.length} transactions');
+    
+    for (final doc in transactionsSnapshot.docs) {
+      final data = doc.data();
+      debugPrint('Transaction data: ${data.toString()}');
+      
+      // Skip settlement transactions
+      if (data['is_settlement'] == true) {
+        debugPrint('Skipping settlement transaction');
+        continue;
+      }
 
+      // Use transaction's original currency
+      final rawAmt = (data['amount'] ?? 0).toDouble();
+      final currencyCode = data['currency'] ?? 'USD';
+      
+      debugPrint('Adding amount: $rawAmt in currency: $currencyCode');
+      
+      // Initialize currency tracking if not exists
+      if (!totalSpentByCurrency.containsKey(currencyCode)) {
+        totalSpentByCurrency[currencyCode] = 0;
+      }
+      
+      // Add to total spent
+      totalSpentByCurrency[currencyCode] = 
+          (totalSpentByCurrency[currencyCode] ?? 0) + rawAmt;
+    }
+    
+    debugPrint('Final totals: $totalSpentByCurrency');
+    return totalSpentByCurrency;
+  } catch (e) {
+    debugPrint('Error calculating total spent: $e');
+    return totalSpentByCurrency;
+  }
+}
 
-
-
+// Helper method to build currency text
+Widget _buildCurrencyText(String currencyCode, double amount, CurrencyProvider currencyProvider, double fontSize) {
+  final currency = currencyProvider.getCurrencyByCode(currencyCode);
+  final formattedAmount = amount.toStringAsFixed(2);
+  final displayText = currency != null 
+      ? '${currency.symbol}$formattedAmount'
+      : '$currencyCode $formattedAmount';
+  
+  return Text(
+    displayText,
+    style: TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+    ),
+    overflow: TextOverflow.ellipsis,
+  );
+}
 
