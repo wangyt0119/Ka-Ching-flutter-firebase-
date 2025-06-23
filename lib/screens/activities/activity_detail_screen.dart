@@ -112,6 +112,19 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
     final pdf = pw.Document();
 
+    // Get total amounts by currency
+    Map<String, double> totalAmountsByCurrency = {};
+  
+    // Calculate totals from transactions
+    for (var transaction in _transactions) {
+      if (transaction['is_settlement'] == true) continue; // Skip settlements
+    
+      final amount = (transaction['amount'] as num?)?.toDouble() ?? 0.0;
+      final currency = transaction['currency'] ?? 'USD';
+    
+      totalAmountsByCurrency[currency] = (totalAmountsByCurrency[currency] ?? 0.0) + amount;
+    }
+
     pdf.addPage(
       pw.Page(
         build: (_) => pw.Column(
@@ -119,8 +132,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
           children: [
             pw.Text(
               _activity!['name'],
-              style:
-                  pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
             pw.Text(
@@ -132,18 +144,216 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                 pw.Text('Description: ${_activity!['description']}'),
               ]),
             pw.SizedBox(height: 10),
-            pw.Text(
-              'Total Amount: ${_activity!['currency'] ?? '\$'}${(_activity!['totalAmount'] ?? 0.0).toStringAsFixed(2)}',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
+            
+            // Display total amounts for each currency
+            ...totalAmountsByCurrency.entries.map((entry) {
+              final currencyCode = entry.key;
+              final amount = entry.value;
+            
+              // Get currency symbol
+              String currencySymbol = currencyCode;
+              if (currencyCode == 'GBP') currencySymbol = '£';
+              if (currencyCode == 'JPY') currencySymbol = '¥';
+              if (currencyCode == 'CNY') currencySymbol = '¥';
+              if (currencyCode == 'INR') currencySymbol = '₹';
+              if (currencyCode == 'MYR') currencySymbol = 'RM';
+              if (currencyCode == 'SGD') currencySymbol = 'S\$';
+              if (currencyCode == 'IDR') currencySymbol = 'Rp';
+              if (currencyCode == 'USD') currencySymbol = '\$';
+              if (currencyCode == 'EUR') currencySymbol = '€';
+              
+
+              return pw.Text(
+                'Total Amount: $currencySymbol${amount.toStringAsFixed(2)} ($currencyCode)',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              );
+            }).toList(),
+            
             pw.Divider(),
             pw.Text(
               'Transactions',
-              style:
-                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
-            // TODO: list transactions if needed
+            
+            // Transactions table
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(2), // Date
+                1: const pw.FlexColumnWidth(3), // Title
+                2: const pw.FlexColumnWidth(1.5), // Amount
+                3: const pw.FlexColumnWidth(2), // Paid By
+              },
+              children: [
+                // Table header
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('Title', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('Amount', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(5),
+                      child: pw.Text('Paid By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                
+                // Transaction rows
+                ..._transactions.where((txn) => txn['is_settlement'] != true).map((txn) {
+                  // Format date
+                  String dateStr = 'Unknown';
+                  final timestamp = txn['timestamp'] as Timestamp?;
+                  final dateRaw = txn['date'];
+                  
+                  if (timestamp != null) {
+                    dateStr = DateFormat('yyyy-MM-dd').format(timestamp.toDate());
+                  } else if (dateRaw is String) {
+                    try {
+                      final parsedDate = DateTime.tryParse(dateRaw) ?? 
+                                        DateFormat('MMM dd, yyyy').tryParse(dateRaw);
+                      if (parsedDate != null) {
+                        dateStr = DateFormat('yyyy-MM-dd').format(parsedDate);
+                      } else {
+                        dateStr = dateRaw;
+                      }
+                    } catch (e) {
+                      dateStr = dateRaw;
+                    }
+                  }
+                  
+                  // Get amount with currency
+                  final amount = (txn['amount'] as num?)?.toDouble() ?? 0.0;
+                  final currency = txn['currency'] ?? 'USD';
+                  
+                  // Get currency symbol
+                  String currencySymbol = currency;
+                  if (currency == 'USD') currencySymbol = '\$';
+                  if (currency == 'MYR') currencySymbol = 'RM';
+                  if (currency == 'EUR') currencySymbol = '€';
+                  if (currency == 'GBP') currencySymbol = '£';
+                  
+                  final amountStr = '$currencySymbol${amount.toStringAsFixed(2)}';
+                  
+                  // Get paid by
+                  final paidBy = txn['paid_by'] ?? 'Unknown';
+                  
+                  return pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(5),
+                        child: pw.Text(dateStr),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(5),
+                        child: pw.Text(txn['title'] ?? 'Untitled'),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(5),
+                        child: pw.Text(amountStr),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(5),
+                        child: pw.Text(paidBy),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ],
+            ),
+            
+            // Add detailed transaction information
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'Transaction Details',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+            
+            ..._transactions.where((txn) => txn['is_settlement'] != true).map((txn) {
+              // Format date
+              String dateStr = 'Unknown';
+              final timestamp = txn['timestamp'] as Timestamp?;
+              final dateRaw = txn['date'];
+              
+              if (timestamp != null) {
+                dateStr = DateFormat('yyyy-MM-dd').format(timestamp.toDate());
+              } else if (dateRaw is String) {
+                try {
+                  final parsedDate = DateTime.tryParse(dateRaw) ?? 
+                                    DateFormat('MMM dd, yyyy').tryParse(dateRaw);
+                  if (parsedDate != null) {
+                    dateStr = DateFormat('yyyy-MM-dd').format(parsedDate);
+                  } else {
+                    dateStr = dateRaw;
+                  }
+                } catch (e) {
+                  dateStr = dateRaw;
+                }
+              }
+              
+              // Get amount with currency
+              final amount = (txn['amount'] as num?)?.toDouble() ?? 0.0;
+              final currency = txn['currency'] ?? 'USD';
+              
+              // Get currency symbol
+              String currencySymbol = currency;
+              if (currency == 'USD') currencySymbol = '\$';
+              if (currency == 'MYR') currencySymbol = 'RM';
+              if (currency == 'EUR') currencySymbol = '€';
+              if (currency == 'GBP') currencySymbol = '£';
+              
+              final amountStr = '$currencySymbol${amount.toStringAsFixed(2)}';
+              
+              // Get participants
+              final participants = List<String>.from(txn['participants'] ?? []);
+              final participantsStr = participants.join(', ');
+              
+              // Get split method
+              final split = txn['split'] ?? 'equally';
+              
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Divider(),
+                  pw.Text(
+                    txn['title'] ?? 'Untitled',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Date: $dateStr'),
+                      pw.Text('Amount: $amountStr'),
+                    ],
+                  ),
+                  pw.SizedBox(height: 3),
+                  pw.Text('Paid by: ${txn['paid_by'] ?? 'Unknown'}'),
+                  pw.SizedBox(height: 3),
+                  pw.Text('Category: ${txn['category'] ?? 'Uncategorized'}'),
+                  if ((txn['description'] ?? '').toString().isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text('Description: ${txn['description']}'),
+                  ],
+                  pw.SizedBox(height: 3),
+                  pw.Text('Split: $split'),
+                  pw.SizedBox(height: 3),
+                  pw.Text('Participants: $participantsStr'),
+                  pw.SizedBox(height: 10),
+                ],
+              );
+            }).toList(),
           ],
         ),
       ),
