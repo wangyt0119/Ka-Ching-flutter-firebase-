@@ -524,7 +524,10 @@ class _UserHomePageState extends State<UserHomePage> {
             child: Text(createdAt),
           ),
           trailing: FutureBuilder<Map<String, double>>(
-            future: _calculateTotalSpentByCurrency(activity['ownerId'], activity['id']),
+            future: _calculateTotalSpentByCurrency(
+              activity['isCreator'] ? user?.uid ?? '' : activity['ownerId'],
+              activity['id'],
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Column(
@@ -585,8 +588,9 @@ class _UserHomePageState extends State<UserHomePage> {
                 );
               }
               
-              // Show up to 2 currencies
-              final entries = totalSpentByCurrency.entries.toList();
+              // Sort currencies by amount (descending) to show the most significant ones first
+              final entries = totalSpentByCurrency.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
               
               return Container(
                 width: 120, // Fixed width to prevent overflow
@@ -595,18 +599,14 @@ class _UserHomePageState extends State<UserHomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // First currency
+                    // First currency (always show if available)
                     if (entries.isNotEmpty) 
                       _buildCurrencyText(entries[0].key, entries[0].value, currencyProvider, 14),
                     
-                    // Second currency (if exists)
+                    // If more than 1 currency, show "+X more currencies" instead of listing them all
                     if (entries.length > 1)
-                      _buildCurrencyText(entries[1].key, entries[1].value, currencyProvider, 12),
-                    
-                    // If more than 2 currencies, show a hint
-                    if (entries.length > 2)
                       Text(
-                        "See details",
+                        "+${entries.length - 1} more currencies",
                         style: TextStyle(
                           fontSize: 10,
                           color: Theme.of(context).colorScheme.secondary,
@@ -1093,4 +1093,5 @@ Widget _buildCurrencyText(String currencyCode, double amount, CurrencyProvider c
     overflow: TextOverflow.ellipsis,
   );
 }
+
 
