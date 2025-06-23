@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'transaction_detail_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/currency_provider.dart';
+import 'package:intl/intl.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -65,7 +66,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           final activityId = activityDoc.id;
           final activityName = activityData['name'] ?? 'Unnamed Activity';
 
-          // Get transactions for this activity
+          // Get transactions for this activity - ensure descending order by timestamp
           final transactionsSnapshot = await _firestore
               .collection('users')
               .doc(user.uid)
@@ -157,7 +158,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
           if (!isParticipant) continue;
 
-          // Get transactions for this activity
+          // Get transactions for this activity - ensure descending order by timestamp
           final transactionsSnapshot = await _firestore
               .collection('users')
               .doc(ownerId)
@@ -218,6 +219,39 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             transactions.add(transactionData);
           }
         }
+
+        // Sort all transactions by timestamp in descending order (newest first)
+        transactions.sort((a, b) {
+          // Try to get timestamp
+          final aTimestamp = a['timestamp'];
+          final bTimestamp = b['timestamp'];
+          
+          // If both have Timestamp objects
+          if (aTimestamp is Timestamp && bTimestamp is Timestamp) {
+            return bTimestamp.compareTo(aTimestamp); // Descending order
+          }
+          
+          // If timestamps aren't available, try to use date strings
+          final aDate = a['date'] as String?;
+          final bDate = b['date'] as String?;
+          
+          if (aDate != null && bDate != null) {
+            // Try to parse dates
+            try {
+              final aDateTime = DateTime.tryParse(aDate) ?? 
+                               DateFormat('MMM dd, yyyy').parse(aDate);
+              final bDateTime = DateTime.tryParse(bDate) ?? 
+                               DateFormat('MMM dd, yyyy').parse(bDate);
+              return bDateTime.compareTo(aDateTime); // Descending order
+            } catch (e) {
+              // If date parsing fails, fall back to string comparison
+              return bDate.compareTo(aDate); // Descending order
+            }
+          }
+          
+          // If all else fails, keep original order
+          return 0;
+        });
 
         setState(() {
           _allTransactions = transactions;
