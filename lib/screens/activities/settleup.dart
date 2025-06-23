@@ -276,6 +276,9 @@ class SettleUpButton extends StatelessWidget {
       
       // Determine who is paying whom
       final isUserPaying = balance > 0; // If balance is positive, user owes the other person
+      
+      // The person who pays is the settlement_from
+      // The person who receives is the settlement_to
       final settlementFrom = isUserPaying ? user.email : personId;
       final settlementTo = isUserPaying ? personId : user.email;
       
@@ -328,7 +331,43 @@ class SettleUpButton extends StatelessWidget {
         }
       }
       
-      // Recalculate all balances
+      // Update balances directly for the specific currency
+      if (!balancesByCurrency.containsKey(currencyCode)) {
+        balancesByCurrency[currencyCode] = {};
+      }
+      
+      // Get current balances for both users
+      final currentUserBalance = balancesByCurrency[currencyCode]![user.email ?? ''] ?? 0.0;
+      final otherUserBalance = balancesByCurrency[currencyCode]![personId] ?? 0.0;
+      
+      // If user is paying (they owe money)
+      if (isUserPaying) {
+        // Reduce user's debt
+        balancesByCurrency[currencyCode]![user.email ?? ''] = currentUserBalance - balance.abs();
+        // Reduce other person's credit
+        balancesByCurrency[currencyCode]![personId] = otherUserBalance + balance.abs();
+      } else {
+        // Reduce user's credit
+        balancesByCurrency[currencyCode]![user.email ?? ''] = currentUserBalance + balance.abs();
+        // Reduce other person's debt
+        balancesByCurrency[currencyCode]![personId] = otherUserBalance - balance.abs();
+      }
+      
+      // Clean up small values
+      balancesByCurrency.forEach((currency, balances) {
+        balances.forEach((key, value) {
+          if (value is num && value.abs() < 0.01) {
+            balances[key] = 0.0;
+          }
+        });
+      });
+      
+      // Update the activity document with the new balances
+      await activityRef.update({
+        'balances_by_currency': balancesByCurrency,
+      });
+      
+      // Recalculate all balances to ensure consistency
       await _recalculateBalances(
         ownerIdForQuery,
         activityId,
@@ -375,10 +414,10 @@ class SettleUpButton extends StatelessWidget {
     // Process each transaction
     for (var doc in transactionsSnapshot.docs) {
       final transaction = doc.data();
-      final amount = transaction['amount'] ?? 0.0;
-      final currency = transaction['currency'] ?? 'MYR';
-      final paidBy = transaction['paid_by'] ?? '';
-      final paidById = transaction['paid_by_id'] ?? '';
+      final double amount = (transaction['amount'] as num).toDouble();
+      final String currency = transaction['currency'] ?? 'MYR';
+      final String paidBy = transaction['paid_by'] ?? '';
+      final String paidById = transaction['paid_by_id'] ?? '';
       
       // Initialize currency in balancesByCurrency if not exists
       if (!balancesByCurrency.containsKey(currency)) {
@@ -391,9 +430,11 @@ class SettleUpButton extends StatelessWidget {
         final settlementTo = transaction['settlement_to'] ?? '';
         
         if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
-          // Adjust balances for settlement
+          // The person who pays (settlementFrom) gets a positive adjustment (reduces what they owe)
           balancesByCurrency[currency]![settlementFrom] = 
               (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+          
+          // The person who receives (settlementTo) gets a negative adjustment (reduces what they are owed)
           balancesByCurrency[currency]![settlementTo] = 
               (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
         }
@@ -407,7 +448,11 @@ class SettleUpButton extends StatelessWidget {
       if (participants.isEmpty) continue;
       
       // Determine who paid
-      String actualPayer = paidById.isNotEmpty ? paidById : paidBy;
+      String actualPayer = paidBy;
+      if (paidById.isNotEmpty) {
+        // If we have a paidById, use that instead
+        actualPayer = paidById;
+      }
       
       // Add the full amount to the payer's balance
       balancesByCurrency[currency]![actualPayer] = 
@@ -421,19 +466,32 @@ class SettleUpButton extends StatelessWidget {
               (balancesByCurrency[currency]![participant] ?? 0.0) - share;
         }
       } else if (split == 'unequally' || split == 'percentage') {
-        final customAmounts = transaction['custom_amounts'] ?? {};
-        for (var entry in customAmounts.entries) {
-          final participantId = entry.key;
-          final participantAmount = entry.value;
-          balancesByCurrency[currency]![participantId] = 
-              (balancesByCurrency[currency]![participantId] ?? 0.0) - participantAmount;
+        final shares = transaction['shares'] ?? {};
+        if (shares is Map) {
+          shares.forEach((participantId, shareValue) {
+            if (participantId is String && shareValue is num) {
+              final double participantAmount = shareValue.toDouble();
+              
+              // For percentage split, convert percentages to actual amounts
+              final double actualAmount = split == 'percentage' 
+                  ? amount * participantAmount / 100.0 
+                  : participantAmount;
+                  
+              balancesByCurrency[currency]![participantId] = 
+                  (balancesByCurrency[currency]![participantId] ?? 0.0) - actualAmount;
+            }
+          });
         }
       }
     }
     
     // Round small values to zero for each currency
     balancesByCurrency.forEach((currency, currencyBalances) {
-      currencyBalances.removeWhere((key, value) => (value as num).abs() < 0.01);
+      currencyBalances.forEach((key, value) {
+        if (value is num && value.abs() < 0.01) {
+          currencyBalances[key] = 0.0;
+        }
+      });
     });
     
     // Update the activity document with the new balances
