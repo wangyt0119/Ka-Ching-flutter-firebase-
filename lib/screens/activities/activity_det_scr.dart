@@ -220,28 +220,23 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
     if (youOwe.isEmpty && peopleOweYou.isEmpty) return const SizedBox();
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      margin: const EdgeInsets.only(top: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Summary',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: AppTheme.textPrimary,
-              ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Summary',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: AppTheme.textPrimary,
             ),
-            const SizedBox(height: 8),
-            ...youOwe,
-            ...peopleOweYou,
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          ...youOwe,
+          ...peopleOweYou,
+        ],
       ),
     );
   }
@@ -484,16 +479,18 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                                       color: AppTheme.textSecondary),
                                 ),
                               ],
-                              const SizedBox(height: 16),
-                              const Divider(),
+                              const SizedBox(height: 8),
+                              const Divider(
+                                color: AppTheme.dividerColor,
+                                thickness: 1.5,
+                              ),
                               _buildSummaryCard(),
                             ],
                           ),
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-
+                      const SizedBox(height: 5),
+                     
                       // ── TRANSACTIONS LIST ────────────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
