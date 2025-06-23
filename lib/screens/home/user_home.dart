@@ -943,15 +943,6 @@ class _UserHomePageState extends State<UserHomePage> {
                   'Ka-Ching',
                   style: TextStyle(color: Colors.white),
                 ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.notifications_none,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {},
-                  ),
-                ],
               )
               : null,
 
