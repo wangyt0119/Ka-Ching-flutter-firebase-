@@ -350,49 +350,284 @@ class SettleUpButton extends StatelessWidget {
         activityCurrencyObj
       );
       
-      // Create a settlement transaction in the selected activity
-      final isPositive = balance >= 0;
+      // Determine who is paying whom
+      final isUserPaying = balance > 0; // If balance is positive, user owes the other person
+      final settlementFrom = isUserPaying ? user.email : personId;
+      final settlementTo = isUserPaying ? personId : user.email;
       
-      // Use the actual user ID instead of "You" for consistency with balance calculations
-      final currentUserKey = user.uid;
-      
+      // Create the settlement transaction
       final settlement = {
-        'title': isPositive ? 'You settled debt with $personName' : '$personName settled debt with you',
+        'title': 'Settlement',
         'amount': settlementAmountInActivityCurrency,
-        'currency': activityCurrency,
-        'date': DateTime.now().toString().split(' ')[0],
-        'description': 'Settlement transaction',
-        'paid_by': isPositive ? currentUserKey : personId,
-        'paid_by_id': isPositive ? currentUserKey : personId,
-        'split': 'settlement', // Use a special split type for settlements
-        'participants': [personId], // Only the other person participates in settlement
-        'settlement_amount': settlementAmountInActivityCurrency,
-        'settlement_from': isPositive ? currentUserKey : personId,
-        'settlement_to': isPositive ? personId : currentUserKey,
-        'is_settlement': true,
+        'currency': activityCurrencyObj.code, // Use activity's currency
+        'date': DateTime.now().toIso8601String(),
         'timestamp': FieldValue.serverTimestamp(),
+        'description': isUserPaying 
+            ? 'You paid ${personName}'
+            : '${personName} paid you',
+        'category': 'Settlement',
+        'paid_by': isUserPaying ? user.email : personId,
+        'paid_by_id': isUserPaying ? user.uid : '',
+        'participants': [user.email, personId],
+        'split': 'settlement',
+        'is_settlement': true,
+        'settlement_from': settlementFrom,
+        'settlement_to': settlementTo,
+        'original_currency': currencyProvider.selectedCurrency.code,
+        'original_amount': balance.abs(),
       };
       
-      final ownerIdForQuery = ownerId ?? user.uid;
-      await FirebaseFirestore.instance
+      // Add the settlement transaction to Firestore
+      final activityRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(ownerIdForQuery)
+          .doc(ownerId)
           .collection('activities')
-          .doc(activityId)
-          .collection('transactions')
-          .add(settlement);
+          .doc(activityId);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settlement recorded successfully')),
-      );
+      await activityRef.collection('transactions').add(settlement);
+      
+      // Get current activity data
+      final activityDoc = await activityRef.get();
+      final activityData = activityDoc.data() ?? {};
+      
+      // Get or initialize the balances structure
+      Map<String, dynamic> balances = Map<String, dynamic>.from(activityData['balances'] ?? {});
+      
+      // Get or initialize the currency-specific balances
+      Map<String, Map<String, dynamic>> balancesByCurrency = {};
+      
+      if (activityData.containsKey('balances_by_currency')) {
+        final rawBalancesByCurrency = activityData['balances_by_currency'] as Map<String, dynamic>?;
+        if (rawBalancesByCurrency != null) {
+          rawBalancesByCurrency.forEach((currency, balanceData) {
+            balancesByCurrency[currency] = Map<String, dynamic>.from(balanceData);
+          });
+        }
+      }
+      
+      // Recalculate all balances
+      final transactionsSnapshot = await activityRef.collection('transactions').get();
+      
+      // Reset balances
+      balances.clear();
+      balancesByCurrency.clear();
+      
+      // Process each transaction
+      for (var doc in transactionsSnapshot.docs) {
+        final transaction = doc.data();
+        final amount = transaction['amount'] ?? 0.0;
+        final currency = transaction['currency'] ?? 'USD';
+        final paidBy = transaction['paid_by'] ?? '';
+        final paidById = transaction['paid_by_id'] ?? '';
+        
+        // Initialize currency in balancesByCurrency if not exists
+        if (!balancesByCurrency.containsKey(currency)) {
+          balancesByCurrency[currency] = {};
+        }
+        
+        // Handle settlement transactions
+        if (transaction['is_settlement'] == true) {
+          final settlementFrom = transaction['settlement_from'] ?? '';
+          final settlementTo = transaction['settlement_to'] ?? '';
+          
+          if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+            // Adjust balances for settlement in the specific currency
+            balancesByCurrency[currency]![settlementFrom] = 
+                (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+            balancesByCurrency[currency]![settlementTo] = 
+                (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
+          }
+          continue;
+        }
+        
+        // Handle regular transactions
+        final split = transaction['split'] ?? 'equally';
+        final participants = List<String>.from(transaction['participants'] ?? []);
+        
+        if (participants.isEmpty) continue;
+        
+        // Determine who paid
+        String actualPayer = paidById.isNotEmpty ? paidById : paidBy;
+        
+        // Add the full amount to the payer's balance in the specific currency
+        balancesByCurrency[currency]![actualPayer] = 
+            (balancesByCurrency[currency]![actualPayer] ?? 0.0) + amount;
+        
+        // Subtract each participant's share in the specific currency
+        if (split == 'equally') {
+          final share = amount / participants.length;
+          for (var participant in participants) {
+            balancesByCurrency[currency]![participant] = 
+                (balancesByCurrency[currency]![participant] ?? 0.0) - share;
+          }
+        } else if (split == 'unequally' || split == 'percentage') {
+          final shares = transaction['shares'] as Map<String, dynamic>?;
+          if (shares != null) {
+            for (var entry in shares.entries) {
+              final participantId = entry.key;
+              double participantShare = 0.0;
+              
+              if (split == 'unequally') {
+                participantShare = (entry.value as num).toDouble();
+              } else if (split == 'percentage') {
+                final percentage = (entry.value as num).toDouble();
+                participantShare = amount * percentage / 100;
+              }
+              
+              balancesByCurrency[currency]![participantId] = 
+                  (balancesByCurrency[currency]![participantId] ?? 0.0) - participantShare;
+            }
+          }
+        }
+      }
+      
+      // Round small values to zero for each currency
+      balancesByCurrency.forEach((currency, currencyBalances) {
+        currencyBalances.removeWhere((key, value) => (value as num).abs() < 0.01);
+      });
+      
+      // Create a consolidated balance in the activity's primary currency
+      // This is for backward compatibility with existing code
+      final primaryCurrency = activityData['currency'] ?? 'USD';
+      
+      // Copy the balances from the primary currency to the main balances map
+      if (balancesByCurrency.containsKey(primaryCurrency)) {
+        balancesByCurrency[primaryCurrency]!.forEach((person, amount) {
+          balances[person] = amount;
+        });
+      }
+      
+      // Update the activity document with the new balances
+      await activityRef.update({
+        'balances': balances,
+        'balances_by_currency': balancesByCurrency,
+      });
       
       // Refresh the activity data
       refreshActivity();
-    } catch (e) {
-      debugPrint('Error creating settlement: $e');
+      
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating settlement: $e')),
+        const SnackBar(content: Text('Settlement recorded successfully')),
       );
+    } catch (e) {
+      print('Error creating settlement: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _recalculateBalances(
+    String ownerId,
+    String activityId,
+    Map<String, dynamic> balances,
+    Map<String, Map<String, dynamic>> balancesByCurrency,
+  ) async {
+    // Clear existing balances
+    balances.clear();
+    balancesByCurrency.clear();
+    
+    // Get all transactions
+    final transactionsSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('activities')
+        .doc(activityId)
+        .collection('transactions')
+        .get();
+    
+    // Process each transaction
+    for (var doc in transactionsSnapshot.docs) {
+      final transaction = doc.data();
+      final amount = transaction['amount'] ?? 0.0;
+      final currency = transaction['currency'] ?? 'USD';
+      final paidBy = transaction['paid_by'] ?? '';
+      final paidById = transaction['paid_by_id'] ?? '';
+      
+      // Initialize currency in balancesByCurrency if not exists
+      if (!balancesByCurrency.containsKey(currency)) {
+        balancesByCurrency[currency] = {};
+      }
+      
+      // Handle settlement transactions
+      if (transaction['is_settlement'] == true) {
+        final settlementFrom = transaction['settlement_from'] ?? '';
+        final settlementTo = transaction['settlement_to'] ?? '';
+        
+        if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+          // Adjust balances for settlement in the specific currency
+          balancesByCurrency[currency]![settlementFrom] = 
+              (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+          balancesByCurrency[currency]![settlementTo] = 
+              (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
+        }
+        continue;
+      }
+      
+      // Handle regular transactions
+      final split = transaction['split'] ?? 'equally';
+      final participants = List<String>.from(transaction['participants'] ?? []);
+      
+      if (participants.isEmpty) continue;
+      
+      // Determine who paid
+      String actualPayer = paidById.isNotEmpty ? paidById : paidBy;
+      
+      // Add the full amount to the payer's balance in the specific currency
+      balancesByCurrency[currency]![actualPayer] = 
+          (balancesByCurrency[currency]![actualPayer] ?? 0.0) + amount;
+      
+      // Subtract each participant's share in the specific currency
+      if (split == 'equally') {
+        final share = amount / participants.length;
+        for (var participant in participants) {
+          balancesByCurrency[currency]![participant] = 
+              (balancesByCurrency[currency]![participant] ?? 0.0) - share;
+        }
+      } else if (split == 'unequally' || split == 'percentage') {
+        final shares = transaction['shares'] as Map<String, dynamic>?;
+        if (shares != null) {
+          for (var entry in shares.entries) {
+            final participantId = entry.key;
+            double participantShare = 0.0;
+            
+            if (split == 'unequally') {
+              participantShare = (entry.value as num).toDouble();
+            } else if (split == 'percentage') {
+              final percentage = (entry.value as num).toDouble();
+              participantShare = amount * percentage / 100;
+            }
+            
+            balancesByCurrency[currency]![participantId] = 
+                (balancesByCurrency[currency]![participantId] ?? 0.0) - participantShare;
+          }
+        }
+      }
+    }
+    
+    // Round small values to zero for each currency
+    balancesByCurrency.forEach((currency, currencyBalances) {
+      currencyBalances.removeWhere((key, value) => (value as num).abs() < 0.01);
+    });
+    
+    // Create a consolidated balance in the activity's primary currency
+    // This is for backward compatibility with existing code
+    final activityDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('activities')
+        .doc(activityId)
+        .get();
+    
+    final activityData = activityDoc.data() ?? {};
+    final primaryCurrency = activityData['currency'] ?? 'USD';
+    
+    // Copy the balances from the primary currency to the main balances map
+    if (balancesByCurrency.containsKey(primaryCurrency)) {
+      balancesByCurrency[primaryCurrency]!.forEach((person, amount) {
+        balances[person] = amount;
+      });
     }
   }
 
@@ -418,6 +653,8 @@ class SettleUpButton extends StatelessWidget {
     );
   }
 }
+
+
 
 
 

@@ -142,8 +142,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
         'createdBy'    : user.uid,
         'createdByName': _userName,
         'currency'     : currency,
-        'totalAmount'  : 0.0,                 // NEW -> keeps charts happy
-        'balances'     : _initialBalances(),  // NEW -> Summary card works
+        'totalAmount'  : 0.0,                 // Keeps charts happy
       });
 
       if (mounted) {

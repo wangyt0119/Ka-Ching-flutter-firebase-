@@ -167,9 +167,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     
     if (user == null || _activity == null) return const SizedBox();
 
-    final balances =
-        _activity!['balances'] as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
-    if (balances.isEmpty) return const SizedBox();
+    // Get both regular balances and balances by currency
+    final balances = _activity!['balances'] as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
+    final balancesByCurrency = _activity!['balances_by_currency'] as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
+    
+    if (balances.isEmpty && balancesByCurrency.isEmpty) return const SizedBox();
 
     // Robust identity matching
     final uid = user.uid;
@@ -177,49 +179,121 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
     final name = user.displayName ?? '';
     bool isSelf(String key) => key == uid || key == email || key == name;
 
-    final currency = _activity!['currency'] ?? 'RM';
+    final defaultCurrency = _activity!['currency'] ?? 'USD';
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
 
-    final List<Widget> youOwe = [];
-    final List<Widget> peopleOweYou = [];
+    final List<Widget> summaryItems = [];
 
+    // Helper function to get name from key
     String _getNameFromKey(String key) {
-    final members = _activity!['members'] as List<dynamic>? ?? [];
-    for (final m in members) {
-      if (m['id'] == key || m['email'] == key) {
-        return m['name'] ?? key; // fallback to key if name is missing
+      final members = _activity!['members'] as List<dynamic>? ?? [];
+      for (final m in members) {
+        if (m['id'] == key || m['email'] == key) {
+          return m['name'] ?? key; // fallback to key if name is missing
+        }
       }
+      return key;
     }
-    return key;
-  }
 
-    balances.forEach((key, value) {
-  final double amount = (value as num).toDouble();
+    // Process balances by currency
+    balancesByCurrency.forEach((currency, currencyBalances) {
+      final Map<String, dynamic> balancesForCurrency = Map<String, dynamic>.from(currencyBalances);
+      
+      if (balancesForCurrency.isEmpty) return;
+      
+      final currencyObj = currencyProvider.getCurrencyByCode(currency) ?? 
+                         currencyProvider.getCurrencyByCode(defaultCurrency) ??
+                         currencyProvider.selectedCurrency;
+      
+      final List<Widget> currencyItems = [];
+      
+      balancesForCurrency.forEach((key, value) {
+        final double amount = (value as num).toDouble();
+        
+        // Skip if self (by uid or email)
+        if (isSelf(key)) return;
+        
+        final name = _getNameFromKey(key);
+        
+        if (amount < 0) {
+          // They owe you
+          currencyItems.add(
+            Text(
+              '$name owes you ${currencyObj.symbol}${amount.abs().toStringAsFixed(2)} (${currencyObj.code})',
+              style: const TextStyle(color: Colors.green),
+            ),
+          );
+        } else if (amount > 0) {
+          // You owe them
+          currencyItems.add(
+            Text(
+              'You owe $name ${currencyObj.symbol}${amount.toStringAsFixed(2)} (${currencyObj.code})',
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
+      });
+      
+      if (currencyItems.isNotEmpty) {
+        // Add currency header if there are multiple currencies
+        if (balancesByCurrency.length > 1) {
+          summaryItems.add(
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+              child: Text(
+                '${currencyObj.code} Balances:',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        }
+        
+        summaryItems.addAll(currencyItems);
+        
+        // Add separator if not the last currency
+        if (currency != balancesByCurrency.keys.last && currencyItems.isNotEmpty) {
+          summaryItems.add(const SizedBox(height: 8));
+        }
+      }
+    });
 
-  // Skip if self (by uid or email)
-  if (isSelf(key)) return;
+    // If no items were added from balances_by_currency, fall back to the old balances
+    if (summaryItems.isEmpty) {
+      final List<Widget> youOwe = [];
+      final List<Widget> peopleOweYou = [];
+      
+      balances.forEach((key, value) {
+        final double amount = (value as num).toDouble();
+        
+        // Skip if self (by uid or email)
+        if (isSelf(key)) return;
+        
+        final name = _getNameFromKey(key);
+        
+        if (amount < 0) {
+          // They owe you
+          peopleOweYou.add(
+            Text(
+              '$name owes you $defaultCurrency${amount.abs().toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.green),
+            ),
+          );
+        } else if (amount > 0) {
+          // You owe them
+          youOwe.add(
+            Text(
+              'You owe $name $defaultCurrency${amount.toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
+      });
+      
+      summaryItems.addAll(youOwe);
+      summaryItems.addAll(peopleOweYou);
+    }
 
-  final name = _getNameFromKey(key);
-
-  if (amount < 0) {
-    // They owe you
-    peopleOweYou.add(
-      Text(
-        '$name owes you $currency${amount.abs().toStringAsFixed(2)}',
-        style: const TextStyle(color: Colors.green),
-      ),
-    );
-  } else if (amount > 0) {
-    // You owe them
-    youOwe.add(
-      Text(
-        'You owe $name $currency${amount.toStringAsFixed(2)}',
-        style: const TextStyle(color: Colors.red),
-      ),
-    );
-  }
-});
-
-    if (youOwe.isEmpty && peopleOweYou.isEmpty) return const SizedBox();
+    if (summaryItems.isEmpty) return const SizedBox();
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -235,8 +309,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          ...youOwe,
-          ...peopleOweYou,
+          ...summaryItems,
         ],
       ),
     );

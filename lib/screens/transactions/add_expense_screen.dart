@@ -336,6 +336,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       );
       return;
     }
+  } else if (splitMethod == 'percentage') {
+    final totalPercentage = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+    
+    if ((totalPercentage - 100.0).abs() > 0.1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
+      );
+      return;
+    }
   }
 
   final user = _auth.currentUser!;
@@ -368,6 +377,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     'description': _descriptionController.text,
     'category': selectedCategory,
     'paid_by': payerIdentifier,
+    'paid_by_id': payerIdentifier == user.email ? user.uid : '',
     'participants': participantIdentifiers,
     'split': splitMethod,
     'receipt_image': _base64Image,
@@ -415,26 +425,54 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       .collection('activities')
       .doc(activityId);
 
-  // Get current balances to preserve the key format (email vs name)
+  // Get current activity data
   final activityDoc = await activityRef.get();
-  final currentBalances = Map<String, double>.from(
-    activityDoc.data()?['balances'] ?? {}
-  );
+  final activityData = activityDoc.data() ?? {};
+  
+  // Get or initialize the currency-specific balances
+  Map<String, Map<String, double>> balancesByCurrency = {};
+  
+  if (activityData.containsKey('balances_by_currency')) {
+    final rawBalancesByCurrency = activityData['balances_by_currency'] as Map<String, dynamic>?;
+    if (rawBalancesByCurrency != null) {
+      rawBalancesByCurrency.forEach((currency, balanceData) {
+        balancesByCurrency[currency] = Map<String, double>.from(balanceData);
+      });
+    }
+  }
 
   final txnSnap = await activityRef.collection('transactions').get();
 
-  // Reset all balances to 0, but keep the same keys
-  final Map<String, double> balances = {};
-  for (String key in currentBalances.keys) {
-    balances[key] = 0.0;
-  }
+  // Reset all balances to 0
+  balancesByCurrency.clear();
 
   // -------- scan every transaction --------
   for (final doc in txnSnap.docs) {
     final t = doc.data();
     final double amount = (t['amount'] as num).toDouble();
+    final String currency = t['currency'] ?? 'MYR'; // Default to MYR if not specified
     final String payer = t['paid_by'] as String; // This should already be an email
     final List participants = List.from(t['participants'] ?? []);
+
+    // Initialize currency in balancesByCurrency if not exists
+    if (!balancesByCurrency.containsKey(currency)) {
+      balancesByCurrency[currency] = {};
+    }
+
+    // Handle settlement transactions
+    if (t['is_settlement'] == true) {
+      final settlementFrom = t['settlement_from'] ?? '';
+      final settlementTo = t['settlement_to'] ?? '';
+      
+      if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+        // Adjust balances for settlement in the specific currency
+        balancesByCurrency[currency]![settlementFrom] = 
+            (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+        balancesByCurrency[currency]![settlementTo] = 
+            (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
+      }
+      continue;
+    }
 
     // ---- work out each participant's share ----
     Map<String, double> shares = {};
@@ -447,32 +485,38 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         final String participantEmail = p as String;
         shares[participantEmail] = each;
       }
-    } else if (split == 'unequally') {
+    } else if (split == 'unequally' || split == 'percentage') {
       shares = Map<String, double>.from(t['shares'] ?? {});
-    } else if (split == 'percentage') {
-      final raw = Map<String, num>.from(t['shares'] ?? {});
-      raw.forEach((p, pct) => shares[p] = amount * pct / 100.0);
+      
+      // For percentage split, convert percentages to actual amounts
+      if (split == 'percentage') {
+        shares.forEach((person, percentage) {
+          shares[person] = amount * percentage / 100.0;
+        });
+      }
     }
 
     // ---- update balances ----
+    // Add the full amount to the payer's balance in the specific currency
+    balancesByCurrency[currency]![payer] = 
+        (balancesByCurrency[currency]![payer] ?? 0.0) + amount;
+    
+    // Subtract each participant's share in the specific currency
     shares.forEach((person, share) {
-      // Ensure the person exists in balances map using email
-      if (!balances.containsKey(person)) {
-        balances[person] = 0.0;
-      }
-      
-      if (person == payer) {
-        // payer paid the whole bill, but owes their own share
-        balances[payer] = (balances[payer] ?? 0) + amount - share;
-      } else {
-        // everyone else owes the payer their share
-        balances[person] = (balances[person] ?? 0) - share;
-      }
+      balancesByCurrency[currency]![person] = 
+          (balancesByCurrency[currency]![person] ?? 0.0) - share;
     });
   }
 
+  // -------- clean up small values --------
+  balancesByCurrency.forEach((currency, currencyBalances) {
+    currencyBalances.removeWhere((key, value) => value.abs() < 0.01);
+  });
+
   // -------- write back on the activity doc --------
-  await activityRef.update({'balances': balances});
+  await activityRef.update({
+    'balances_by_currency': balancesByCurrency,
+  });
 }
   @override
   Widget build(BuildContext context) {
