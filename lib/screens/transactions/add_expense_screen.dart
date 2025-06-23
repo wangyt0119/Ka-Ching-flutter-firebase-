@@ -51,8 +51,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String get _currentUserName =>
     _auth.currentUser!.displayName ?? _auth.currentUser!.email!;
 
-  String _toFirestoreName(String label) =>
-    label == _currentUserLabel ? _auth.currentUser!.email! : label;
+  Future<String> _toFirestoreName(String label) async {
+    if (label == _currentUserLabel) {
+      return _auth.currentUser!.email!;
+    }
+    
+    // Look up the friend's email by their display name
+    final friendsSnapshot = await _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('friends')
+        .where('name', isEqualTo: label)
+        .limit(1)
+        .get();
+        
+    if (friendsSnapshot.docs.isNotEmpty) {
+      final friendData = friendsSnapshot.docs.first.data();
+      return friendData['email'] as String? ?? label;
+    }
+    
+    return label; // Fallback to the label if email not found
+  }
   // Category selection
   String selectedCategory = 'Food';
   final List<String> categories = [
@@ -326,69 +345,55 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // Always use email identifiers for consistency
   String payerIdentifier = paidBy == _currentUserLabel 
       ? user.email! 
-      : _toFirestoreName(paidBy!);
+      : await _toFirestoreName(paidBy!);
   
   // Get participants as email identifiers
-  List<String> participantIdentifiers = selectedParticipants.entries
-      .where((e) => e.value)
-      .map((e) => e.key == _currentUserLabel ? user.email! : _toFirestoreName(e.key))
-      .toList();
+  List<String> participantIdentifiers = [];
+  for (var entry in selectedParticipants.entries) {
+    if (entry.value) { // Only include selected participants
+      String email = entry.key == _currentUserLabel 
+          ? user.email! 
+          : await _toFirestoreName(entry.key);
+      participantIdentifiers.add(email);
+    }
+  }
   
+  // Create expense document
   final expense = {
-    'title': _titleController.text.trim(),
-    'amount': double.tryParse(_amountController.text.trim()) ?? 0,
+    'title': _titleController.text,
+    'amount': double.parse(_amountController.text),
     'currency': selectedCurrency,
-    'date': DateFormat.yMMMd().format(selectedDate),
-    'description': _descriptionController.text.trim(),
-    'paid_by': payerIdentifier, // Store email for all users
-    'paid_by_id': paidBy == _currentUserLabel ? user.uid : null,
-    'split': splitMethod,
-    'category': selectedCategory,
-    'participants': participantIdentifiers, // Store emails/identifiers
-    if (_base64Image != null) 'receipt_image': _base64Image, 
+    'date': selectedDate.toIso8601String(),
     'timestamp': FieldValue.serverTimestamp(),
+    'description': _descriptionController.text,
+    'category': selectedCategory,
+    'paid_by': payerIdentifier,
+    'participants': participantIdentifiers,
+    'split': splitMethod,
+    'receipt_image': _base64Image,
   };
 
   // Handle different split methods - use emails/identifiers as keys
-  if (splitMethod == 'unequally') {
+  if (splitMethod == 'unequally' || splitMethod == 'percentage') {
     final shares = <String, double>{};
-    final participants = selectedParticipants.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
     
-    for (var participant in participants) {
-      String participantIdentifier = participant == _currentUserLabel 
+    for (var participant in selectedParticipants.entries.where((e) => e.value).map((e) => e.key)) {
+      String participantEmail = participant == _currentUserLabel 
           ? user.email! 
-          : _toFirestoreName(participant);
-      shares[participantIdentifier] = customShares[participant] ?? 0.0;
-    }
-    
-    expense['shares'] = shares;
-  } else if (splitMethod == 'percentage') {
-    final shares = <String, double>{};
-    final participants = selectedParticipants.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
-    
-    for (var participant in participants) {
-      String participantIdentifier = participant == _currentUserLabel 
-          ? user.email! 
-          : _toFirestoreName(participant);
-      shares[participantIdentifier] = customShares[participant] ?? 0.0;
+          : await _toFirestoreName(participant);
+      shares[participantEmail] = customShares[participant] ?? 0.0;
     }
     
     expense['shares'] = shares;
   }
 
   await _firestore
-  .collection('users')
-  .doc(ownerId)
-  .collection('activities')
-  .doc(selectedActivityId)
-  .collection('transactions')
-  .add(expense);
+      .collection('users')
+      .doc(ownerId)
+      .collection('activities')
+      .doc(selectedActivityId)
+      .collection('transactions')
+      .add(expense);
 
   await _recalculateBalances(ownerId: ownerId, activityId: selectedActivityId!);
 
@@ -396,8 +401,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Navigator.pop(context, true);
   ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Expense added and balances updated')),
-    );
+    const SnackBar(content: Text('Expense added and balances updated')),
+  );
 }
 
   Future<void> _recalculateBalances({
