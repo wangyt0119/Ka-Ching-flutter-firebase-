@@ -45,7 +45,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String splitMethod = 'equally';
   String? paidBy = 'You';
+  
+  String get _currentUserLabel => 'You';
+  String get _currentUserId   => _auth.currentUser!.uid;
+  String get _currentUserName =>
+    _auth.currentUser!.displayName ?? _auth.currentUser!.email!;
 
+  String _toFirestoreName(String label) =>
+    label == _currentUserLabel ? _auth.currentUser!.email! : label;
   // Category selection
   String selectedCategory = 'Food';
   final List<String> categories = [
@@ -250,7 +257,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   void _setParticipants(List<String> friends) {
-    final members = ['You', ...friends];
+    final members = [_currentUserLabel, ...friends];
     setState(() {
       allParticipants = members;
       selectedParticipants = {for (var name in members) name: true};
@@ -286,95 +293,182 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 }
 
-
+  String _getParticipantIdentifier(String displayName) {
+    if (displayName == 'You' || displayName == _currentUserLabel) {
+      return _auth.currentUser!.email!;
+    }
+    
+    // For friends, you might need to store their emails when creating activities
+    // For now, we'll return the display name, but ideally you should store friend emails
+    return displayName;
+  }
   Future<void> _submitExpense() async {
-    if (!_formKey.currentState!.validate() || selectedActivityId == null)
-      return;
+  if (!_formKey.currentState!.validate() || selectedActivityId == null)
+    return;
 
-    // Validate split amounts match total for unequal and percentage splits
-    if (splitMethod == 'unequally') {
-      final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
-      final totalShares = customShares.values.fold(0.0, (sum, amount) => sum + amount);
-      
-      if ((totalAmount - totalShares).abs() > 0.01) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
-        );
-        return;
-      }
-    }
-
-    final user = _auth.currentUser!;
-    final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
-    final ownerId = selectedActivity['ownerId'] ?? user.uid;
-    final expense = {
-      'title': _titleController.text.trim(),
-      'amount': double.tryParse(_amountController.text.trim()) ?? 0,
-      'currency': selectedCurrency,
-      'date': DateFormat.yMMMd().format(selectedDate),
-      'description': _descriptionController.text.trim(),
-      // Store the actual user name/email, not "You"
-      'paid_by': paidBy == 'You' ? (_auth.currentUser!.displayName ?? _auth.currentUser!.email) : paidBy,
-      // Always store the user ID for the payer
-      'paid_by_id': paidBy == 'You' ? _auth.currentUser!.uid : null,
-      'split': splitMethod,
-      'category': selectedCategory, // Add category to the expense
-      'participants': selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList(),
-      if (_base64Image != null) 'receipt_image': _base64Image, 
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    // Handle different split methods
-    if (splitMethod == 'unequally') {
-      // Create shares map for unequal split
-      final shares = <String, double>{};
-      final participants = selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
-      
-      for (var participant in participants) {
-        shares[participant] = customShares[participant] ?? 0.0;
-      }
-      
-      expense['shares'] = shares;
-    } else if (splitMethod == 'percentage') {
-      // Create shares map for percentage split
-      final shares = <String, double>{};
-      final participants = selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
-      
-      for (var participant in participants) {
-        shares[participant] = customShares[participant] ?? 0.0;
-      }
-      
-      expense['shares'] = shares;
-    }
-
-    await _firestore
-        .collection('users')
-        .doc(ownerId)
-        .collection('activities')
-        .doc(selectedActivityId)
-        .collection('transactions')
-        .add(expense);
-
-    // After submission, trigger balance recalculation
-    if (context.mounted) {
+  // Validate split amounts match total for unequal and percentage splits
+  if (splitMethod == 'unequally') {
+    final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final totalShares = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+    
+    if ((totalAmount - totalShares).abs() > 0.01) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transaction added, recalculating balances...')),
+        SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
       );
+      return;
     }
-
-    // Return true to indicate successful addition
-    Navigator.pop(context, true);
   }
 
+  final user = _auth.currentUser!;
+  final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
+  final ownerId = selectedActivity['ownerId'] ?? user.uid;
+  
+  // Always use email identifiers for consistency
+  String payerIdentifier = paidBy == _currentUserLabel 
+      ? user.email! 
+      : _toFirestoreName(paidBy!);
+  
+  // Get participants as email identifiers
+  List<String> participantIdentifiers = selectedParticipants.entries
+      .where((e) => e.value)
+      .map((e) => e.key == _currentUserLabel ? user.email! : _toFirestoreName(e.key))
+      .toList();
+  
+  final expense = {
+    'title': _titleController.text.trim(),
+    'amount': double.tryParse(_amountController.text.trim()) ?? 0,
+    'currency': selectedCurrency,
+    'date': DateFormat.yMMMd().format(selectedDate),
+    'description': _descriptionController.text.trim(),
+    'paid_by': payerIdentifier, // Store email for all users
+    'paid_by_id': paidBy == _currentUserLabel ? user.uid : null,
+    'split': splitMethod,
+    'category': selectedCategory,
+    'participants': participantIdentifiers, // Store emails/identifiers
+    if (_base64Image != null) 'receipt_image': _base64Image, 
+    'timestamp': FieldValue.serverTimestamp(),
+  };
+
+  // Handle different split methods - use emails/identifiers as keys
+  if (splitMethod == 'unequally') {
+    final shares = <String, double>{};
+    final participants = selectedParticipants.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+    
+    for (var participant in participants) {
+      String participantIdentifier = participant == _currentUserLabel 
+          ? user.email! 
+          : _toFirestoreName(participant);
+      shares[participantIdentifier] = customShares[participant] ?? 0.0;
+    }
+    
+    expense['shares'] = shares;
+  } else if (splitMethod == 'percentage') {
+    final shares = <String, double>{};
+    final participants = selectedParticipants.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+    
+    for (var participant in participants) {
+      String participantIdentifier = participant == _currentUserLabel 
+          ? user.email! 
+          : _toFirestoreName(participant);
+      shares[participantIdentifier] = customShares[participant] ?? 0.0;
+    }
+    
+    expense['shares'] = shares;
+  }
+
+  await _firestore
+  .collection('users')
+  .doc(ownerId)
+  .collection('activities')
+  .doc(selectedActivityId)
+  .collection('transactions')
+  .add(expense);
+
+  await _recalculateBalances(ownerId: ownerId, activityId: selectedActivityId!);
+
+  if (!mounted) return;
+
+  Navigator.pop(context, true);
+  ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Expense added and balances updated')),
+    );
+}
+
+  Future<void> _recalculateBalances({
+  required String ownerId,
+  required String activityId,
+}) async {
+  final activityRef = _firestore
+      .collection('users')
+      .doc(ownerId)
+      .collection('activities')
+      .doc(activityId);
+
+  // Get current balances to preserve the key format (email vs name)
+  final activityDoc = await activityRef.get();
+  final currentBalances = Map<String, double>.from(
+    activityDoc.data()?['balances'] ?? {}
+  );
+
+  final txnSnap = await activityRef.collection('transactions').get();
+
+  // Reset all balances to 0, but keep the same keys
+  final Map<String, double> balances = {};
+  for (String key in currentBalances.keys) {
+    balances[key] = 0.0;
+  }
+
+  // -------- scan every transaction --------
+  for (final doc in txnSnap.docs) {
+    final t = doc.data();
+    final double amount = (t['amount'] as num).toDouble();
+    final String payer = t['paid_by'] as String; // This should already be an email
+    final List participants = List.from(t['participants'] ?? []);
+
+    // ---- work out each participant's share ----
+    Map<String, double> shares = {};
+    final split = t['split'] ?? 'equally';
+
+    if (split == 'equally') {
+      final each = amount / participants.length;
+      for (final p in participants) {
+        // Ensure p is an email identifier
+        final String participantEmail = p as String;
+        shares[participantEmail] = each;
+      }
+    } else if (split == 'unequally') {
+      shares = Map<String, double>.from(t['shares'] ?? {});
+    } else if (split == 'percentage') {
+      final raw = Map<String, num>.from(t['shares'] ?? {});
+      raw.forEach((p, pct) => shares[p] = amount * pct / 100.0);
+    }
+
+    // ---- update balances ----
+    shares.forEach((person, share) {
+      // Ensure the person exists in balances map using email
+      if (!balances.containsKey(person)) {
+        balances[person] = 0.0;
+      }
+      
+      if (person == payer) {
+        // payer paid the whole bill, but owes their own share
+        balances[payer] = (balances[payer] ?? 0) + amount - share;
+      } else {
+        // everyone else owes the payer their share
+        balances[person] = (balances[person] ?? 0) - share;
+      }
+    });
+  }
+
+  // -------- write back on the activity doc --------
+  await activityRef.update({'balances': balances});
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -995,7 +1089,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ],
       );
     }
-    
     return const SizedBox();
   }
 }

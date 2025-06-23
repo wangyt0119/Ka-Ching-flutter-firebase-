@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 import '../activities/add_activity_screen.dart';
 import '../transactions/add_expense_screen.dart';
 import '../profile/profile_screen.dart';
-import '../activities/activity_detail_screen.dart';
+import '../activities/activity_det_scr.dart';
 import '../friends/friends_screen.dart';
 import '../transactions/transactions_screen.dart';
 import 'package:provider/provider.dart';
@@ -133,8 +133,13 @@ class _UserHomePageState extends State<UserHomePage> {
           balances[id] = 0.0;
         }
 
-        // Also initialize balance for "You" key (for backward compatibility)
-        balances['You'] = 0.0;
+        // Get all user identifiers for the current user
+        final userKeys = [
+          user.uid,
+          user.email,
+          user.displayName,
+          'You'
+        ].where((key) => key != null && key.isNotEmpty).toList().cast<String>();
 
         // Fetch all transactions for this activity
         final transactionsSnapshot = await FirebaseFirestore.instance
@@ -147,7 +152,11 @@ class _UserHomePageState extends State<UserHomePage> {
         final transactions = transactionsSnapshot.docs.map((doc) => doc.data()).toList();
 
         for (var transaction in transactions) {
+          // Skip settlement transactions when calculating balances
+          if (transaction['is_settlement'] == true) continue;
+          
           final paidBy = transaction['paid_by'] ?? '';
+          final paidById = transaction['paid_by_id'] ?? '';
           final originalAmount = transaction['amount']?.toDouble() ?? 0.0;
           final originalCurrency = transaction['currency'] ?? 'USD';
           final fromCurrency = currencyProvider.availableCurrencies.firstWhere(
@@ -158,34 +167,9 @@ class _UserHomePageState extends State<UserHomePage> {
           final split = transaction['split'] ?? 'equally';
           final participants = List<String>.from(transaction['participants'] ?? []);
 
-          // Handle settlement transactions
-          if (transaction['is_settlement'] == true) {
-            final settlementFrom = transaction['settlement_from'] ?? '';
-            final settlementTo = transaction['settlement_to'] ?? '';
-            final settlementAmount = amount;
-
-            // Apply settlement: reduce debt between parties
-            // When someone pays to settle debt, their balance increases (less negative or more positive)
-            // and the receiver's balance decreases (less positive or more negative)
-            if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
-              // Handle both old format ("You") and new format (user ID)
-              String actualSettlementFrom = settlementFrom;
-              String actualSettlementTo = settlementTo;
-
-              // Convert "You" to actual user ID for consistency
-              if (settlementFrom == 'You') {
-                actualSettlementFrom = user.uid;
-              }
-              if (settlementTo == 'You') {
-                actualSettlementTo = user.uid;
-              }
-
-              balances[actualSettlementFrom] = (balances[actualSettlementFrom] ?? 0.0) + settlementAmount;
-              balances[actualSettlementTo] = (balances[actualSettlementTo] ?? 0.0) - settlementAmount;
-            }
-            continue;
-          }
-
+          // Determine if current user is the payer
+          final isCurrentUserPayer = userKeys.contains(paidBy) || userKeys.contains(paidById);
+          
           if (split == 'equally' && participants.isNotEmpty) {
             final sharePerPerson = amount / participants.length;
             balances[paidBy] = (balances[paidBy] ?? 0.0) + amount;
@@ -214,45 +198,18 @@ class _UserHomePageState extends State<UserHomePage> {
             // Note: paidBy is already included in participants loop above, so no need to deduct again
           }
         }
-
-        // Consolidate all user balance entries into a single entry
-        // Find all possible keys that represent the current user
-        Set<String> userKeys = {};
-        if (user.uid.isNotEmpty) userKeys.add(user.uid);
-        if (user.email != null && user.email!.isNotEmpty) userKeys.add(user.email!);
-        userKeys.add('You'); // Always include "You" as a possible user key
-
-        // Add any member keys that match the current user
-        for (var member in activityMembers) {
-          if (member is Map<String, dynamic>) {
-            if (member['id'] == user.uid || member['email'] == user.email) {
-              final memberKey = member['id'] ?? member['email'] ?? member['name'];
-              if (memberKey != null) userKeys.add(memberKey);
-            }
-          }
-        }
-
-        // Consolidate all user balances into a single value
-        double userBalance = 0.0;
+        
+        // After processing all transactions, consolidate user's balance
+        double consolidatedUserBalance = 0.0;
         for (String key in userKeys) {
           if (balances.containsKey(key)) {
-            userBalance += balances[key] ?? 0.0;
-            // Remove the entry to avoid double counting in other calculations
+            consolidatedUserBalance += balances[key] ?? 0.0;
             balances.remove(key);
           }
         }
-
-        // Store the consolidated balance under the user's UID for consistency
-        final userKey = user.uid;
-        balances[userKey] = userBalance;
-
-        if (userBalance > 0) {
-          // Positive balance means user is owed money
-          totalOwed += userBalance;
-        } else if (userBalance < 0) {
-          // Negative balance means user owes money
-          totalOwing += userBalance.abs();
-        }
+        
+        // Store the consolidated balance for the current user
+        activity['userBalance'] = consolidatedUserBalance;
       }
       setState(() {
         fullName = data?['full_name'] ?? 'User';
@@ -534,7 +491,7 @@ class _UserHomePageState extends State<UserHomePage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ActivityDetailsScreen(
+                builder: (_) => ActivityDetailScreen(
                   activityId: activity['id'],
                   ownerId: activity['isCreator'] ? null : activity['ownerId'],
                   title: activity['name'],
@@ -1000,4 +957,9 @@ class _UserHomePageState extends State<UserHomePage> {
     );
   }
 }
+
+
+
+
+
 
