@@ -242,9 +242,10 @@ class _UserHomePageState extends State<UserHomePage> {
         children: [
           Text(
             "Hello, $fullName",
-            style: Theme.of(context).textTheme.headlineSmall,
+            //style: Theme.of(context).textTheme.headlineSmall,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
 
           Card(
             shape: RoundedRectangleBorder(

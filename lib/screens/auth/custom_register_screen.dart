@@ -189,27 +189,28 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedRole,
-                decoration: InputDecoration(
-                  labelText: 'Select Role',
-                  filled: true,
-                  fillColor: AppTheme.surfaceColor,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.dividerColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppTheme.primaryColor),
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'user', child: Text('User')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                ],
-                onChanged: (value) => setState(() => selectedRole = value!),
-              ),
+              // Select Role
+              // DropdownButtonFormField<String>(
+              //   value: selectedRole,
+              //   decoration: InputDecoration(
+              //     labelText: 'Select Role',
+              //     filled: true,
+              //     fillColor: AppTheme.surfaceColor,
+              //     enabledBorder: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(16),
+              //       borderSide: const BorderSide(color: AppTheme.dividerColor),
+              //     ),
+              //     focusedBorder: OutlineInputBorder(
+              //       borderRadius: BorderRadius.circular(16),
+              //       borderSide: const BorderSide(color: AppTheme.primaryColor),
+              //     ),
+              //   ),
+              //   items: const [
+              //     DropdownMenuItem(value: 'user', child: Text('User')),
+              //     DropdownMenuItem(value: 'admin', child: Text('Admin')),
+              //   ],
+              //   onChanged: (value) => setState(() => selectedRole = value!),
+              // ),
               const SizedBox(height: 20),
               if (errorMessage != null)
                 Text(errorMessage!,
