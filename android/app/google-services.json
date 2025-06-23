@@ -1,7 +1,6 @@
 {
   "project_info": {
     "project_number": "175995407076",
-    "firebase_url": "https://ka-ching-a9b4f-default-rtdb.firebaseio.com",
     "project_id": "ka-ching-a9b4f",
     "storage_bucket": "ka-ching-a9b4f.firebasestorage.app"
   },
@@ -13,20 +12,7 @@
           "package_name": "com.example.kaching"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "175995407076-7hcrqgfqacul0143mof9bn6ul5i1k6bs.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.kaching",
-            "certificate_hash": "acb487292f0515aceef30b11d29e0af2bf4e3945"
-          }
-        },
-        {
-          "client_id": "175995407076-tefkgm4be14ik8rl6h0t3v46t067shcq.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
           "current_key": "AIzaSyDSvMmI_VhJuCPUW07Fz3xLWeN7haP1nn0"
@@ -34,19 +20,7 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "175995407076-tefkgm4be14ik8rl6h0t3v46t067shcq.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "175995407076-o9fe32520ljh3cdspq9hhc4fqjsi9i20.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.kaching"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
