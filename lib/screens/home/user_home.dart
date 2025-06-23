@@ -5,7 +5,7 @@ import '../../theme/app_theme.dart';
 import '../activities/add_activity_screen.dart';
 import '../transactions/add_expense_screen.dart';
 import '../profile/profile_screen.dart';
-import '../activities/activity_det_scr.dart';
+import '../activities/activity_detail_screen.dart';
 import '../friends/friends_screen.dart';
 import '../transactions/transactions_screen.dart';
 import 'package:provider/provider.dart';
