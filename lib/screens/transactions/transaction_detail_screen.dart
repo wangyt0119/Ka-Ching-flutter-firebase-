@@ -679,12 +679,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.deepPurple.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     categoryIcon,
-                    color: Colors.blue,
+                    color: Colors.deepPurple,
                     size: 20,
                   ),
                 ),
