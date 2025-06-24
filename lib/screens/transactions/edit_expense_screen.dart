@@ -614,11 +614,11 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                       child: InputDecorator(
                         decoration: InputDecoration(
                           labelText: 'Date',
-                          prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFFB19CD9)),
+                          prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFFF5A9C1)),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide:
-                                      const BorderSide(color: Color(0xFFB19CD9)),
+                                      const BorderSide(color: Color(0xFFF5A9C1)),
                           ),
                         ),
                         child: Row(
@@ -715,7 +715,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                                   title: Text(name),
                                   value: name,
                                   groupValue: paidBy,
-                                  activeColor: Color(0xFFB19CD9),
+                                  activeColor: Color(0xFFF5A9C1),
                                   onChanged:
                                       (value) => setState(() => paidBy = value),
                                 ),
@@ -737,10 +737,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           selectedColor: Color(0xFFF5A9C1),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color: splitMethod == 'equally' ? Colors.white : Color(0xFFB19CD9),
+                            color: splitMethod == 'equally' ? Colors.white : Color(0xFFF5A9C1),
                             fontWeight: FontWeight.bold,
                           ),
-                          side: const BorderSide(color: Color(0xFFB19CD9)),
+                          side: const BorderSide(color: Color(0xFFF5A9C1)),
                           onSelected: (_) => setState(() => splitMethod = 'equally'),
                         ),
                         const SizedBox(width: 8),
@@ -750,10 +750,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           selectedColor: Color(0xFFF5A9C1),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color: splitMethod == 'unequally' ? Colors.white : Color(0xFFB19CD9),
+                            color: splitMethod == 'unequally' ? Colors.white : Color(0xFFF5A9C1),
                             fontWeight: FontWeight.bold,
                           ),
-                          side: const BorderSide(color: Color(0xFFB19CD9)),
+                          side: const BorderSide(color: Color(0xFFF5A9C1)),
                           onSelected: (_) => setState(() => splitMethod = 'unequally'),
                         ),
                         const SizedBox(width: 8),
@@ -763,10 +763,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> {
                           selectedColor: Color(0xFFF5A9C1),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color: splitMethod == 'percentage' ? Colors.white : Color(0xFFB19CD9),
+                            color: splitMethod == 'percentage' ? Colors.white : Color(0xFFF5A9C1),
                             fontWeight: FontWeight.bold,
                           ),
-                          side: const BorderSide(color: Color(0xFFB19CD9)),
+                          side: const BorderSide(color: Color(0xFFF5A9C1)),
                           onSelected: (_) => setState(() => splitMethod = 'percentage'),
                         ),
                       ],

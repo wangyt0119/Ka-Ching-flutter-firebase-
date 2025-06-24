@@ -245,7 +245,7 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
                         trailing : Checkbox(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(4)),
-                          activeColor: const Color(0xFFB19CD9),
+                          activeColor: const Color(0xFFF5A9C1),
                           value: f['selected'],
                           onChanged: (v) => setState(() {
                             _friends[i]['selected'] = v;
@@ -290,19 +290,19 @@ class _AddActivityScreenState extends State<AddActivityScreen> {
   InputDecoration _fieldDecoration({required String label, required IconData icon}) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, color: const Color(0xFFB19CD9)),
+      prefixIcon: Icon(icon, color: const Color(0xFFF5A9C1)),
       filled: true,
       fillColor: Theme.of(context).cardColor,
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFB19CD9))),
+          borderSide: const BorderSide(color: Color(0xFFF5A9C1))),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFB19CD9))),
+          borderSide: const BorderSide(color: Color(0xFFF5A9C1))),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide:
-              const BorderSide(color: Color(0xFFB19CD9), width: 2)),
+              const BorderSide(color: Color(0xFFF5A9C1), width: 2)),
     );
   }
 

@@ -542,12 +542,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   labelText: "Select Activity",
-                  prefixIcon: const Icon(Icons.event, color: Color(0xFFB19CD9)),
+                  prefixIcon: const Icon(Icons.event, color: Color(0xFFF5A9C1)),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                 ),
                 value: selectedActivityId,
@@ -573,11 +573,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Color(0xFFB19CD9)),
+                  border: Border.all(color: Color(0xFFF5A9C1)),
                   borderRadius: BorderRadius.circular(12),
                   color: Theme.of(context).cardColor,
                 ),
-                
+
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -585,7 +585,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       'Currency: $selectedCurrency',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFB19CD9)),
+                          color: Color(0xFFF5A9C1)),
                     ),
                     TextButton(
                       onPressed: _showCurrencyDialog,
@@ -603,21 +603,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: "Title",
-                  prefixIcon: const Icon(Icons.title, color: Color(0xFFB19CD9)),
+                  prefixIcon: const Icon(Icons.title, color: Color(0xFFF5A9C1)),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
+                      color: Color(0xFFF5A9C1),
                       width: 2,
                     ),
                   ),
@@ -632,22 +632,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   labelText: "Amount",
                   prefixIcon: const Icon(
                     Icons.attach_money,
-                    color: Color(0xFFB19CD9),
+                    color: Color(0xFFF5A9C1),
                   ),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
+                      color: Color(0xFFF5A9C1),
                       width: 2,
                     ),
                   ),
@@ -672,22 +672,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   labelText: "Date",
                   prefixIcon: const Icon(
                     Icons.date_range,
-                    color: Color(0xFFB19CD9),
+                    color: Color(0xFFF5A9C1),
                   ),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
+                      color: Color(0xFFF5A9C1),
                       width: 2,
                     ),
                   ),
@@ -703,22 +703,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   labelText: "Description (optional)",
                   prefixIcon: const Icon(
                     Icons.description,
-                    color: Color(0xFFB19CD9),
+                    color: Color(0xFFF5A9C1),
                   ),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
+                      color: Color(0xFFF5A9C1),
                       width: 2,
                     ),
                   ),
@@ -730,21 +730,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   labelText: "Category",
-                  prefixIcon: const Icon(Icons.category, color: Color(0xFFB19CD9)),
+                  prefixIcon: const Icon(Icons.category, color: Color(0xFFF5A9C1)),
                   filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                    borderSide: const BorderSide(color: Color(0xFFF5A9C1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                      color: Color(0xFFB19CD9),
+                      color: Color(0xFFF5A9C1),
                       width: 2,
                     ),
                   ),
@@ -767,7 +767,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
-                  border: Border.all(color: Color(0xFFB19CD9)),
+                  border: Border.all(color: Color(0xFFF5A9C1)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -776,7 +776,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ListTile(
                       leading: const Icon(
                         Icons.receipt_long,
-                        color: Color(0xFFB19CD9),
+                        color: Color(0xFFF5A9C1),
                       ),
                       title: const Text("Tap to add a receipt image"),
                       subtitle: _receiptImage != null ? const Text("Image selected") : null,
@@ -808,7 +808,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             title: Text(name),
                             value: name,
                             groupValue: paidBy,
-                            activeColor: Color(0xFFB19CD9),
+                            activeColor: Color(0xFFF5A9C1),
                             onChanged:
                                 (value) => setState(() => paidBy = value),
                           ),
@@ -831,10 +831,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       color:
                           splitMethod == 'equally'
                               ? Colors.white
-                              : Color(0xFFB19CD9),
+                              : Color(0xFFF5A9C1),
                       fontWeight: FontWeight.bold,
                     ),
-                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    side: const BorderSide(color: Color(0xFFF5A9C1)),
                     onSelected: (_) => setState(() => splitMethod = 'equally'),
                   ),
                   const SizedBox(width: 8),
@@ -847,10 +847,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       color:
                           splitMethod == 'unequally'
                               ? Colors.white
-                              : Color(0xFFB19CD9),
+                              : Color(0xFFF5A9C1),
                       fontWeight: FontWeight.bold,
                     ),
-                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    side: const BorderSide(color: Color(0xFFF5A9C1)),
                     onSelected:
                         (_) => setState(() => splitMethod = 'unequally'),
                   ),
@@ -864,10 +864,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       color:
                           splitMethod == 'percentage'
                               ? Colors.white
-                              : Color(0xFFB19CD9),
+                              : Color(0xFFF5A9C1),
                       fontWeight: FontWeight.bold,
                     ),
-                    side: const BorderSide(color: Color(0xFFB19CD9)),
+                    side: const BorderSide(color: Color(0xFFF5A9C1)),
                     onSelected:
                         (_) => setState(() => splitMethod = 'percentage'),
                   ),
@@ -885,7 +885,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 (name) => CheckboxListTile(
                   title: Text(name),
                   value: selectedParticipants[name] ?? false,
-                  activeColor: Color(0xFFB19CD9),
+                  activeColor: Color(0xFFF5A9C1),
                   onChanged:
                       (value) =>
                           setState(() => selectedParticipants[name] = value!),

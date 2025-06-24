@@ -319,7 +319,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final userEmail = user?.email;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFB19CD9),
+        backgroundColor: const Color(0xFFF5A9C1),
         foregroundColor: Colors.white,
         title: Text(_transaction != null 
             ? '${_transaction!['category'] ?? 'Transaction'} Details' 
