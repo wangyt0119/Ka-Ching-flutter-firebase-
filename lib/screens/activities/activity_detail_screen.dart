@@ -580,10 +580,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.deepPurple.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: Colors.blue, size: 24),
+                child: Icon(icon, color: Colors.deepPurple, size: 24),
               ),
               const SizedBox(width: 12),
               Expanded(
