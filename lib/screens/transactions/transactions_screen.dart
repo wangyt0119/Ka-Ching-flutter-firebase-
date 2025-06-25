@@ -385,6 +385,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                               builder: (context) => TransactionDetailScreen(
                                 transactionId: transaction['id'],
                                 activityId: transaction['activityId'],
+                                ownerId: transaction['ownerId'],
                               ),
                             ),
                           ).then((_) => _loadTransactions());
