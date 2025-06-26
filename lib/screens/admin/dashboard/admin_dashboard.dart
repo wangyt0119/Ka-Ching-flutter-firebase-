@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../../auth_gate.dart';
 import '../../../theme/app_theme.dart';
 import '../profile/profile_screen.dart';
-import '../activity/activity_screen.dart';
+//import '../activity/activity_screen.dart';
 import '../users/users_screen.dart';
 import 'chartSection.dart';
 
@@ -30,7 +30,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     _pages.addAll([
       _DashboardPage(isDaily: _isDaily, onToggle: _toggleChartView),
       const UsersScreen(),
-      const ActivityScreen(),
+      //const ActivityScreen(),
       const ProfileScreen(),
     ]);
   }
@@ -181,8 +181,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
               children: [
                 _buildDrawerItem(0, Icons.dashboard, 'Dashboard'),
                 _buildDrawerItem(1, Icons.people, 'Users'),
-                _buildDrawerItem(2, Icons.local_activity, 'Activities'),
-                _buildDrawerItem(3, Icons.person, 'Profile'),
+                //_buildDrawerItem(2, Icons.local_activity, 'Activities'),
+                _buildDrawerItem(2, Icons.person, 'Profile'),
                 const Divider(height: 32),
                 _buildDrawerItem(-1, Icons.logout, 'Logout', isLogout: true),
               ],
@@ -247,10 +247,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
           icon: Icon(Icons.people),
           label: 'Users',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.local_activity),
-          label: 'Activities',
-        ),
+        // BottomNavigationBarItem(
+        //   icon: Icon(Icons.local_activity),
+        //   label: 'Activities',
+        // ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),
           label: 'Profile',
@@ -324,8 +324,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
               children: [
                 _buildNavItem(0, Icons.dashboard, 'Dashboard', _selectedIndex == 0),
                 _buildNavItem(1, Icons.people, 'Users', _selectedIndex == 1),
-                _buildNavItem(2, Icons.local_activity, 'Activities', _selectedIndex == 2),
-                _buildNavItem(3, Icons.person, 'Profile', _selectedIndex == 3),
+                //_buildNavItem(2, Icons.local_activity, 'Activities', _selectedIndex == 2),
+                _buildNavItem(2, Icons.person, 'Profile', _selectedIndex == 3),
                 const SizedBox(height: 20),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -484,9 +484,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
         return 'Dashboard';
       case 1:
         return 'Users Management';
+      // case 2:
+      //   return 'Activities Management';
       case 2:
-        return 'Activities Management';
-      case 3:
         return 'Profile Settings';
       default:
         return 'Admin Panel';
