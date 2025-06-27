@@ -34,6 +34,8 @@ dependencies:
   path_provider: ^2.1.1
   open_file: ^3.3.2
   share_plus: ^7.1.0
+  # OCR for receipt scanning
+  google_mlkit_text_recognition: ^0.13.0
   
 dev_dependencies:
   flutter_test:
