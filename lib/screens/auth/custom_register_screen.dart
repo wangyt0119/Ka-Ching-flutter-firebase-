@@ -130,11 +130,14 @@ class _CustomRegisterScreenState extends State<CustomRegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: SizedBox(
-                  width: 120,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Image.asset('kaching.png'),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 20.0), // Add padding to move it down
+                  child: SizedBox(
+                    width: 120,
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.asset('assets/kaching.png'),
+                    ),
                   ),
                 ),
               ),
