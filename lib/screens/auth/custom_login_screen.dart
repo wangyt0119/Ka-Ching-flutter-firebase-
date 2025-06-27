@@ -122,11 +122,9 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
       errorMessage = null;
     });
     try {
-      final GoogleSignInAccount? googleUser =
-          await GoogleSignIn(
-            clientId:
-                "175995407076-tefkgm4be14ik8rl6h0t3v46t067shcq.apps.googleusercontent.com",
-          ).signIn();
+      // Remove the clientId parameter for Android
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      
       if (googleUser == null) {
         setState(() => isLoading = false);
         return; // User cancelled
@@ -195,11 +193,14 @@ class _CustomLoginScreenState extends State<CustomLoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: SizedBox(
-                  width: 120,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Image.asset('kaching.png'),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 20.0), // Add padding to move it down
+                  child: SizedBox(
+                    width: 120,
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.asset('assets/kaching.png'),
+                    ),
                   ),
                 ),
               ),

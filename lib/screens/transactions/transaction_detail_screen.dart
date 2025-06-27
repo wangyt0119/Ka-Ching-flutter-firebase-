@@ -145,14 +145,23 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final ownerId = widget.ownerId ?? user.uid;
       final activityId = widget.activityId;
       final transactionId = widget.transactionId;
-      await FirebaseFirestore.instance
+      
+      // Reference to the activity
+      final activityRef = FirebaseFirestore.instance
           .collection('users')
           .doc(ownerId)
           .collection('activities')
-          .doc(activityId)
+          .doc(activityId);
+      
+      // Delete the transaction
+      await activityRef
           .collection('transactions')
           .doc(transactionId)
           .delete();
+      
+      // Recalculate balances
+      await _recalculateBalances(ownerId, activityId!);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Transaction deleted successfully')),
@@ -166,6 +175,110 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         );
       }
     }
+  }
+
+  Future<void> _recalculateBalances(String ownerId, String activityId) async {
+    // Get the activity reference
+    final activityRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('activities')
+        .doc(activityId);
+    
+    // Get all transactions
+    final transactionsSnapshot = await activityRef
+        .collection('transactions')
+        .get();
+    
+    // Initialize balances by currency
+    Map<String, Map<String, dynamic>> balancesByCurrency = {};
+    
+    // Process each transaction
+    for (var doc in transactionsSnapshot.docs) {
+      final transaction = doc.data();
+      final double amount = (transaction['amount'] as num).toDouble();
+      final String currency = transaction['currency'] ?? 'MYR';
+      final String paidBy = transaction['paid_by'] ?? '';
+      final String paidById = transaction['paid_by_id'] ?? '';
+      
+      // Initialize currency in balancesByCurrency if not exists
+      if (!balancesByCurrency.containsKey(currency)) {
+        balancesByCurrency[currency] = {};
+      }
+      
+      // Handle settlement transactions
+      if (transaction['is_settlement'] == true) {
+        final settlementFrom = transaction['settlement_from'] ?? '';
+        final settlementTo = transaction['settlement_to'] ?? '';
+        
+        if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+          // The person who pays (settlementFrom) gets a positive adjustment
+          balancesByCurrency[currency]![settlementFrom] = 
+              (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+          
+          // The person who receives (settlementTo) gets a negative adjustment
+          balancesByCurrency[currency]![settlementTo] = 
+              (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
+        }
+        continue;
+      }
+      
+      // Handle regular transactions
+      final split = transaction['split'] ?? 'equally';
+      final participants = List<String>.from(transaction['participants'] ?? []);
+      
+      if (participants.isEmpty) continue;
+      
+      // Determine who paid
+      String actualPayer = paidBy;
+      if (paidById.isNotEmpty) {
+        actualPayer = paidById;
+      }
+      
+      // Add the full amount to the payer's balance
+      balancesByCurrency[currency]![actualPayer] = 
+          (balancesByCurrency[currency]![actualPayer] ?? 0.0) + amount;
+      
+      // Subtract each participant's share
+      if (split == 'equally') {
+        final share = amount / participants.length;
+        for (var participant in participants) {
+          balancesByCurrency[currency]![participant] = 
+              (balancesByCurrency[currency]![participant] ?? 0.0) - share;
+        }
+      } else if (split == 'unequally' || split == 'percentage') {
+        final shares = transaction['shares'] ?? {};
+        if (shares is Map) {
+          shares.forEach((participantId, shareValue) {
+            if (participantId is String && shareValue is num) {
+              final double participantAmount = shareValue.toDouble();
+              
+              // For percentage split, convert percentages to actual amounts
+              final double actualAmount = split == 'percentage' 
+                  ? amount * participantAmount / 100.0 
+                  : participantAmount;
+                  
+              balancesByCurrency[currency]![participantId] = 
+                  (balancesByCurrency[currency]![participantId] ?? 0.0) - actualAmount;
+            }
+          });
+        }
+      }
+    }
+    
+    // Round small values to zero for each currency
+    balancesByCurrency.forEach((currency, currencyBalances) {
+      currencyBalances.forEach((key, value) {
+        if (value is num && value.abs() < 0.01) {
+          currencyBalances[key] = 0.0;
+        }
+      });
+    });
+    
+    // Update the activity document with the new balances
+    await activityRef.update({
+      'balances_by_currency': balancesByCurrency,
+    });
   }
 
   Future<void> _editTransaction() async {
@@ -206,9 +319,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final userEmail = user?.email;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFB19CD9),
+        backgroundColor: const Color(0xFFF5A9C1),
         foregroundColor: Colors.white,
-        title: const Text('Transaction Details'),
+        title: Text(_transaction != null 
+            ? '${_transaction!['category'] ?? 'Transaction'} Details' 
+            : 'Transaction Details'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -331,6 +446,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   const Icon(Icons.person, size: 16, color: Colors.grey),
                                   const SizedBox(width: 8),
                                   Text('Paid by ${_transaction!['paid_by'] ?? 'Unknown'}'),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Add category row
+                              Row(
+                                children: [
+                                  const Icon(Icons.category, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_transaction!['category'] ?? 'Uncategorized'),
                                 ],
                               ),
                               if (_transaction!['description'] != null && _transaction!['description'].toString().isNotEmpty)
@@ -510,6 +634,36 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         splitMethodText = 'Split equally';
     }
     
+    // Get category and assign appropriate icon
+    final category = _transaction!['category'] ?? 'Other';
+    IconData categoryIcon;
+    
+    switch (category) {
+      case 'Food':
+        categoryIcon = Icons.restaurant;
+        break;
+      case 'Beverage':
+        categoryIcon = Icons.local_drink;
+        break;
+      case 'Entertainment':
+        categoryIcon = Icons.movie;
+        break;
+      case 'Transportation':
+        categoryIcon = Icons.directions_car;
+        break;
+      case 'Shopping':
+        categoryIcon = Icons.shopping_bag;
+        break;
+      case 'Travel':
+        categoryIcon = Icons.flight;
+        break;
+      case 'Utilities':
+        categoryIcon = Icons.power;
+        break;
+      default:
+        categoryIcon = Icons.category;
+    }
+    
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -519,12 +673,41 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              splitMethodText,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+            // Add category with icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    categoryIcon,
+                    color: Colors.deepPurple,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  category,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.people, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  splitMethodText,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             

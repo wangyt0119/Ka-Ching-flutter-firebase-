@@ -45,6 +45,45 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String splitMethod = 'equally';
   String? paidBy = 'You';
+  
+  String get _currentUserLabel => 'You';
+  String get _currentUserId   => _auth.currentUser!.uid;
+  String get _currentUserName =>
+    _auth.currentUser!.displayName ?? _auth.currentUser!.email!;
+
+  Future<String> _toFirestoreName(String label) async {
+    if (label == _currentUserLabel) {
+      return _auth.currentUser!.email!;
+    }
+    
+    // Look up the friend's email by their display name
+    final friendsSnapshot = await _firestore
+        .collection('users')
+        .doc(_currentUserId)
+        .collection('friends')
+        .where('name', isEqualTo: label)
+        .limit(1)
+        .get();
+        
+    if (friendsSnapshot.docs.isNotEmpty) {
+      final friendData = friendsSnapshot.docs.first.data();
+      return friendData['email'] as String? ?? label;
+    }
+    
+    return label; // Fallback to the label if email not found
+  }
+  // Category selection
+  String selectedCategory = 'Food';
+  final List<String> categories = [
+    'Food', 
+    'Beverage', 
+    'Entertainment', 
+    'Transportation', 
+    'Shopping', 
+    'Travel', 
+    'Utilities', 
+    'Other'
+  ];
 
   List<String> allParticipants = [];
   Map<String, bool> selectedParticipants = {};
@@ -237,7 +276,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   void _setParticipants(List<String> friends) {
-    final members = ['You', ...friends];
+    final members = [_currentUserLabel, ...friends];
     setState(() {
       allParticipants = members;
       selectedParticipants = {for (var name in members) name: true};
@@ -273,99 +312,212 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 }
 
-
+  String _getParticipantIdentifier(String displayName) {
+    if (displayName == 'You' || displayName == _currentUserLabel) {
+      return _auth.currentUser!.email!;
+    }
+    
+    // For friends, you might need to store their emails when creating activities
+    // For now, we'll return the display name, but ideally you should store friend emails
+    return displayName;
+  }
   Future<void> _submitExpense() async {
-    if (!_formKey.currentState!.validate() || selectedActivityId == null)
-      return;
+  if (!_formKey.currentState!.validate() || selectedActivityId == null)
+    return;
 
-    // Validate split amounts match total for unequal and percentage splits
-    if (splitMethod == 'unequally') {
-      final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
-      final totalShares = customShares.values.fold(0.0, (sum, amount) => sum + amount);
-      
-      if ((totalAmount - totalShares).abs() > 0.01) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
-        );
-        return;
-      }
-    } else if (splitMethod == 'percentage') {
-      final totalPercentage = customShares.values.fold(0.0, (sum, amount) => sum + amount);
-      
-      if ((totalPercentage - 100.0).abs() > 0.1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
-        );
-        return;
-      }
-    }
-
-    final user = _auth.currentUser!;
-    final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
-    final ownerId = selectedActivity['ownerId'] ?? user.uid;
-    final expense = {
-      'title': _titleController.text.trim(),
-      'amount': double.tryParse(_amountController.text.trim()) ?? 0,
-      'currency': selectedCurrency,
-      'date': DateFormat.yMMMd().format(selectedDate),
-      'description': _descriptionController.text.trim(),
-      'paid_by': paidBy,
-      'split': splitMethod,
-      'participants': selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList(),
-      if (_base64Image != null) 'receipt_image': _base64Image, 
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    // Handle different split methods
-    if (splitMethod == 'unequally') {
-      // Create shares map for unequal split
-      final shares = <String, double>{};
-      final participants = selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
-      
-      for (var participant in participants) {
-        shares[participant] = customShares[participant] ?? 0.0;
-      }
-      
-      expense['shares'] = shares;
-    } else if (splitMethod == 'percentage') {
-      // Create shares map for percentage split
-      final shares = <String, double>{};
-      final participants = selectedParticipants.entries
-          .where((entry) => entry.value)
-          .map((entry) => entry.key)
-          .toList();
-      
-      for (var participant in participants) {
-        shares[participant] = customShares[participant] ?? 0.0;
-      }
-      
-      expense['shares'] = shares;
-    }
-
-    await _firestore
-        .collection('users')
-        .doc(ownerId)
-        .collection('activities')
-        .doc(selectedActivityId)
-        .collection('transactions')
-        .add(expense);
-
-    // After submission, trigger balance recalculation
-    if (context.mounted) {
+  // Validate split amounts match total for unequal and percentage splits
+  if (splitMethod == 'unequally') {
+    final totalAmount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final totalShares = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+    
+    if ((totalAmount - totalShares).abs() > 0.01) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transaction added, recalculating balances...')),
+        SnackBar(content: Text('Total shares ($totalShares) must equal the expense amount ($totalAmount)')),
       );
+      return;
     }
-
-    Navigator.pop(context);
+  } else if (splitMethod == 'percentage') {
+    final totalPercentage = customShares.values.fold(0.0, (sum, amount) => sum + amount);
+    
+    if ((totalPercentage - 100.0).abs() > 0.1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Total percentage must equal 100% (currently $totalPercentage%)')),
+      );
+      return;
+    }
   }
 
+  final user = _auth.currentUser!;
+  final selectedActivity = userActivities.firstWhere((a) => a['id'] == selectedActivityId);
+  final ownerId = selectedActivity['ownerId'] ?? user.uid;
+  
+  // Always use email identifiers for consistency
+  String payerIdentifier = paidBy == _currentUserLabel 
+      ? user.email! 
+      : await _toFirestoreName(paidBy!);
+  
+  // Get participants as email identifiers
+  List<String> participantIdentifiers = [];
+  for (var entry in selectedParticipants.entries) {
+    if (entry.value) { // Only include selected participants
+      String email = entry.key == _currentUserLabel 
+          ? user.email! 
+          : await _toFirestoreName(entry.key);
+      participantIdentifiers.add(email);
+    }
+  }
+  
+  // Create expense document
+  final expense = {
+    'title': _titleController.text,
+    'amount': double.parse(_amountController.text),
+    'currency': selectedCurrency,
+    'date': selectedDate.toIso8601String(),
+    'timestamp': FieldValue.serverTimestamp(),
+    'description': _descriptionController.text,
+    'category': selectedCategory,
+    'paid_by': payerIdentifier,
+    'paid_by_id': payerIdentifier == user.email ? user.uid : '',
+    'participants': participantIdentifiers,
+    'split': splitMethod,
+    'receipt_image': _base64Image,
+  };
+
+  // Handle different split methods - use emails/identifiers as keys
+  if (splitMethod == 'unequally' || splitMethod == 'percentage') {
+    final shares = <String, double>{};
+    
+    for (var participant in selectedParticipants.entries.where((e) => e.value).map((e) => e.key)) {
+      String participantEmail = participant == _currentUserLabel 
+          ? user.email! 
+          : await _toFirestoreName(participant);
+      shares[participantEmail] = customShares[participant] ?? 0.0;
+    }
+    
+    expense['shares'] = shares;
+  }
+
+  await _firestore
+      .collection('users')
+      .doc(ownerId)
+      .collection('activities')
+      .doc(selectedActivityId)
+      .collection('transactions')
+      .add(expense);
+
+  await _recalculateBalances(ownerId: ownerId, activityId: selectedActivityId!);
+
+  if (!mounted) return;
+
+  Navigator.pop(context, true);
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Expense added and balances updated')),
+  );
+}
+
+  Future<void> _recalculateBalances({
+  required String ownerId,
+  required String activityId,
+}) async {
+  final activityRef = _firestore
+      .collection('users')
+      .doc(ownerId)
+      .collection('activities')
+      .doc(activityId);
+
+  // Get current activity data
+  final activityDoc = await activityRef.get();
+  final activityData = activityDoc.data() ?? {};
+  
+  // Get or initialize the currency-specific balances
+  Map<String, Map<String, double>> balancesByCurrency = {};
+  
+  if (activityData.containsKey('balances_by_currency')) {
+    final rawBalancesByCurrency = activityData['balances_by_currency'] as Map<String, dynamic>?;
+    if (rawBalancesByCurrency != null) {
+      rawBalancesByCurrency.forEach((currency, balanceData) {
+        balancesByCurrency[currency] = Map<String, double>.from(balanceData);
+      });
+    }
+  }
+
+  final txnSnap = await activityRef.collection('transactions').get();
+
+  // Reset all balances to 0
+  balancesByCurrency.clear();
+
+  // -------- scan every transaction --------
+  for (final doc in txnSnap.docs) {
+    final t = doc.data();
+    final double amount = (t['amount'] as num).toDouble();
+    final String currency = t['currency'] ?? 'MYR'; // Default to MYR if not specified
+    final String payer = t['paid_by'] as String; // This should already be an email
+    final List participants = List.from(t['participants'] ?? []);
+
+    // Initialize currency in balancesByCurrency if not exists
+    if (!balancesByCurrency.containsKey(currency)) {
+      balancesByCurrency[currency] = {};
+    }
+
+    // Handle settlement transactions
+    if (t['is_settlement'] == true) {
+      final settlementFrom = t['settlement_from'] ?? '';
+      final settlementTo = t['settlement_to'] ?? '';
+      
+      if (settlementFrom.isNotEmpty && settlementTo.isNotEmpty) {
+        // Adjust balances for settlement in the specific currency
+        balancesByCurrency[currency]![settlementFrom] = 
+            (balancesByCurrency[currency]![settlementFrom] ?? 0.0) + amount;
+        balancesByCurrency[currency]![settlementTo] = 
+            (balancesByCurrency[currency]![settlementTo] ?? 0.0) - amount;
+      }
+      continue;
+    }
+
+    // ---- work out each participant's share ----
+    Map<String, double> shares = {};
+    final split = t['split'] ?? 'equally';
+
+    if (split == 'equally') {
+      final each = amount / participants.length;
+      for (final p in participants) {
+        // Ensure p is an email identifier
+        final String participantEmail = p as String;
+        shares[participantEmail] = each;
+      }
+    } else if (split == 'unequally' || split == 'percentage') {
+      shares = Map<String, double>.from(t['shares'] ?? {});
+      
+      // For percentage split, convert percentages to actual amounts
+      if (split == 'percentage') {
+        shares.forEach((person, percentage) {
+          shares[person] = amount * percentage / 100.0;
+        });
+      }
+    }
+
+    // ---- update balances ----
+    // Add the full amount to the payer's balance in the specific currency
+    balancesByCurrency[currency]![payer] = 
+        (balancesByCurrency[currency]![payer] ?? 0.0) + amount;
+    
+    // Subtract each participant's share in the specific currency
+    shares.forEach((person, share) {
+      balancesByCurrency[currency]![person] = 
+          (balancesByCurrency[currency]![person] ?? 0.0) - share;
+    });
+  }
+
+  // -------- clean up small values --------
+  balancesByCurrency.forEach((currency, currencyBalances) {
+    currencyBalances.removeWhere((key, value) => value.abs() < 0.01);
+  });
+
+  // -------- write back on the activity doc --------
+  await activityRef.update({
+    'balances_by_currency': balancesByCurrency,
+  });
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -573,36 +725,75 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              
+              // Category Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Category",
+                  prefixIcon: const Icon(Icons.category, color: Color(0xFFB19CD9)),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFB19CD9)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFB19CD9),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                value: selectedCategory,
+                items: categories.map((category) {
+                  return DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCategory = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              
               Container(
-  decoration: BoxDecoration(
-    color: Theme.of(context).cardColor,
-    border: Border.all(color: Color(0xFFB19CD9)),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      ListTile(
-        leading: const Icon(
-          Icons.receipt_long,
-          color: Color(0xFFB19CD9),
-        ),
-        title: const Text("Tap to add a receipt image"),
-        subtitle: _receiptImage != null ? const Text("Image selected") : null,
-        onTap: _pickImage,
-      ),
-      if (_base64Image != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Image.memory(
-            base64Decode(_base64Image!),
-            height: 200,
-            fit: BoxFit.cover,
-          ),
-        ),
-    ],
-  ),
-),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border.all(color: Color(0xFFB19CD9)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      leading: const Icon(
+                        Icons.receipt_long,
+                        color: Color(0xFFB19CD9),
+                      ),
+                      title: const Text("Tap to add a receipt image"),
+                      subtitle: _receiptImage != null ? const Text("Image selected") : null,
+                      onTap: _pickImage,
+                    ),
+                    if (_base64Image != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Image.memory(
+                          base64Decode(_base64Image!),
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 24),
               const Text(
@@ -947,7 +1138,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ],
       );
     }
-    
     return const SizedBox();
   }
 }
