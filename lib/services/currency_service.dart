@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../models/currency.dart';
@@ -90,24 +91,34 @@ class CurrencyService {
     final prefs = await SharedPreferences.getInstance();
     final lastUpdated = prefs.getString(_lastUpdatedKey);
 
-    if (lastUpdated == null) return true;
+    if (lastUpdated == null) {
+      print('🔄 No previous update found, update needed');
+      return true;
+    }
 
     final lastUpdateTime = DateTime.parse(lastUpdated);
     final now = DateTime.now();
-
-    return now.difference(lastUpdateTime).inHours > 12;
+    final hoursSinceUpdate = now.difference(lastUpdateTime).inHours;
+    
+    print('🔄 Last update was $hoursSinceUpdate hours ago');
+    return hoursSinceUpdate > 12;
   }
 
   // Update exchange rates from external API with multiple fallbacks
   Future<void> _updateExchangeRatesIfNeeded() async {
-    if (await _needsUpdate()) {
+    // Force update for testing
+    print('🔄 Checking if exchange rates need updating...');
+    final needsUpdate = await _needsUpdate();
+    print('🔄 Needs update: $needsUpdate');
+    
+    if (needsUpdate) {
       print('🔄 Updating exchange rates...');
 
       // Try multiple APIs for better reliability
       final apis = [
         _fetchFromCurrencyAPI,
+        _fetchFromExchangeRateAPI, // This one doesn't need an API key
         _fetchFromFixerIO,
-        _fetchFromExchangeRateAPI,
         _fetchFromFreeCurrencyAPI,
       ];
 
@@ -116,7 +127,7 @@ class CurrencyService {
           final rates = await apiCall();
           if (rates.isNotEmpty) {
             await _saveExchangeRates(rates);
-            print('✅ Exchange rates updated successfully');
+            print('✅ Exchange rates updated successfully with ${rates.length} currencies');
             return;
           }
         } catch (e) {
@@ -126,26 +137,42 @@ class CurrencyService {
       }
 
       print('❌ All APIs failed, using cached rates');
+    } else {
+      print('✅ Exchange rates are up to date');
     }
   }
 
   // API 1: CurrencyAPI (Most accurate)
   Future<Map<String, double>> _fetchFromCurrencyAPI() async {
     print('📡 Trying CurrencyAPI...');
-    final response = await http.get(
-      Uri.parse('https://api.currencyapi.com/v3/latest?apikey=YOUR_API_KEY&base_currency=USD'),
-      headers: {'Accept': 'application/json'},
-    ).timeout(const Duration(seconds: 10));
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.currencyapi.com/v3/latest?apikey=cur_live_2fb8AIGRFzrQVlj5UIdsYRxBVs3PUtvgd1XoKqL1&base_currency=USD'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data['data'] != null) {
-        final Map<String, double> rates = {};
-        data['data'].forEach((key, value) {
-          rates[key] = value['value'].toDouble();
-        });
-        return rates;
+      print('📊 CurrencyAPI response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('📊 CurrencyAPI response data: ${data.toString().substring(0, min(100, data.toString().length))}...');
+        
+        if (data['data'] != null) {
+          final Map<String, double> rates = {};
+          data['data'].forEach((key, value) {
+            rates[key] = value['value'].toDouble();
+          });
+          print('✅ CurrencyAPI rates extracted: ${rates.length} currencies');
+          return rates;
+        } else {
+          print('❌ CurrencyAPI data field is null');
+        }
+      } else {
+        print('❌ CurrencyAPI failed with status: ${response.statusCode}');
+        print('❌ Response body: ${response.body}');
       }
+    } catch (e) {
+      print('❌ CurrencyAPI exception: $e');
     }
     throw Exception('CurrencyAPI failed');
   }
@@ -267,12 +294,15 @@ class CurrencyService {
   // Force update exchange rates (useful for refresh button)
   Future<bool> forceUpdateRates() async {
     print('🔄 Force updating exchange rates...');
+    
+    // Clear cached rates for testing
+    await clearCachedRates();
 
     // Try multiple APIs for better reliability
     final apis = [
       _fetchFromCurrencyAPI,
+      _fetchFromExchangeRateAPI, // This one doesn't need an API key
       _fetchFromFixerIO,
-      _fetchFromExchangeRateAPI,
       _fetchFromFreeCurrencyAPI,
     ];
 
@@ -281,7 +311,7 @@ class CurrencyService {
         final rates = await apiCall();
         if (rates.isNotEmpty) {
           await _saveExchangeRates(rates);
-          print('✅ Exchange rates force updated successfully');
+          print('✅ Exchange rates force updated successfully with ${rates.length} currencies');
           return true;
         }
       } catch (e) {
@@ -417,4 +447,12 @@ class CurrencyService {
     'SGD': 'Singapore Dollar (1 SGD = RM 3.11)',
     'IDR': 'Indonesian Rupiah (1 IDR = RM 0.00030)',
   };
+
+  // For testing: Clear cached exchange rates
+  Future<void> clearCachedRates() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_exchangeRatesKey);
+    await prefs.remove(_lastUpdatedKey);
+    print('🧹 Cleared cached exchange rates');
+  }
 }
