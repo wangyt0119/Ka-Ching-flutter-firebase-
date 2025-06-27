@@ -656,6 +656,37 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
+  // Show dialog to choose between camera and gallery
+  void _showImageSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Upload Receipt'),
+          content: const Text('Choose how you want to upload your receipt:'),
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImageFromCamera();
+              },
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Take Photo'),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImage();
+              },
+              icon: const Icon(Icons.photo_library),
+              label: const Text('Choose from Gallery'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _getParticipantIdentifier(String displayName) {
     if (displayName == 'You' || displayName == _currentUserLabel) {
       return _auth.currentUser!.email!;
@@ -998,6 +1029,28 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
                 validator: (val) => val!.isEmpty ? "Enter an amount" : null,
               ),
+              // Auto-detect note
+              Padding(
+                padding: const EdgeInsets.only(left: 12, top: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 16,
+                      color: Colors.grey[600],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Upload receipt to auto-detect amount',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 readOnly: true,
@@ -1136,28 +1189,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         ),
                       )
                     else
-                      Column(
-                        children: [
-                          ListTile(
-                            leading: const Icon(
-                              Icons.camera_alt,
-                              color: Color(0xFFB19CD9),
-                            ),
-                            title: const Text("Take Photo of Receipt"),
-                            subtitle: const Text("📸 Camera → OCR → Auto-fill amount"),
-                            onTap: _pickImageFromCamera,
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: const Icon(
-                              Icons.photo_library,
-                              color: Color(0xFFB19CD9),
-                            ),
-                            title: const Text("Choose from Gallery"),
-                            subtitle: const Text("🖼️ Gallery → OCR → Auto-fill amount"),
-                            onTap: _pickImage,
-                          ),
-                        ],
+                      ListTile(
+                        leading: const Icon(
+                          Icons.receipt_long,
+                          color: Color(0xFFB19CD9),
+                        ),
+                        title: const Text("Upload Receipt"),
+                        subtitle: const Text("📸 Camera or Gallery → OCR → Auto-fill amount"),
+                        onTap: _showImageSourceDialog,
                       ),
                     if (_base64Image != null)
                       Padding(
