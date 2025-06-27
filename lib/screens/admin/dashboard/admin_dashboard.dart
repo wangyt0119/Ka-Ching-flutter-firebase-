@@ -181,7 +181,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               children: [
                 _buildDrawerItem(0, Icons.dashboard, 'Dashboard'),
                 _buildDrawerItem(1, Icons.people, 'Users'),
-               //_buildDrawerItem(2, Icons.local_activity, 'Activities'),
+                //_buildDrawerItem(2, Icons.local_activity, 'Activities'),
                 _buildDrawerItem(2, Icons.person, 'Profile'),
                 const Divider(height: 32),
                 _buildDrawerItem(-1, Icons.logout, 'Logout', isLogout: true),
