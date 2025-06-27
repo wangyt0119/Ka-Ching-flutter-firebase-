@@ -98,49 +98,130 @@ class CurrencyService {
     return now.difference(lastUpdateTime).inHours > 12;
   }
 
-  // Update exchange rates from external API
+  // Update exchange rates from external API with multiple fallbacks
   Future<void> _updateExchangeRatesIfNeeded() async {
     if (await _needsUpdate()) {
-      try {
-        // Free exchange rate API
-        // Note: In a production app, you would use a paid API with better reliability
-        final response = await http.get(
-          Uri.parse('https://open.er-api.com/v6/latest/USD'),
-        );
+      print('🔄 Updating exchange rates...');
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
+      // Try multiple APIs for better reliability
+      final apis = [
+        _fetchFromCurrencyAPI,
+        _fetchFromFixerIO,
+        _fetchFromExchangeRateAPI,
+        _fetchFromFreeCurrencyAPI,
+      ];
 
-          if (data['rates'] != null) {
-            final Map<String, dynamic> newRates = data['rates'];
-            _exchangeRates = newRates.map(
-              (key, value) => MapEntry(key, value.toDouble()),
-            );
-
-            // Update currency exchange rates
-            for (var currency in _currencies) {
-              if (_exchangeRates.containsKey(currency.code)) {
-                currency.exchangeRate = _exchangeRates[currency.code]!;
-              }
-            }
-
-            // Save to local storage
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString(
-              _exchangeRatesKey,
-              jsonEncode(_exchangeRates),
-            );
-            await prefs.setString(
-              _lastUpdatedKey,
-              DateTime.now().toIso8601String(),
-            );
+      for (final apiCall in apis) {
+        try {
+          final rates = await apiCall();
+          if (rates.isNotEmpty) {
+            await _saveExchangeRates(rates);
+            print('✅ Exchange rates updated successfully');
+            return;
           }
+        } catch (e) {
+          print('⚠️ API failed, trying next: $e');
+          continue;
         }
-      } catch (e) {
-        // If update fails, continue with existing rates
-        print('Error updating exchange rates: $e');
+      }
+
+      print('❌ All APIs failed, using cached rates');
+    }
+  }
+
+  // API 1: CurrencyAPI (Most accurate)
+  Future<Map<String, double>> _fetchFromCurrencyAPI() async {
+    print('📡 Trying CurrencyAPI...');
+    final response = await http.get(
+      Uri.parse('https://api.currencyapi.com/v3/latest?apikey=YOUR_API_KEY&base_currency=USD'),
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['data'] != null) {
+        final Map<String, double> rates = {};
+        data['data'].forEach((key, value) {
+          rates[key] = value['value'].toDouble();
+        });
+        return rates;
       }
     }
+    throw Exception('CurrencyAPI failed');
+  }
+
+  // API 2: Fixer.io (Professional grade)
+  Future<Map<String, double>> _fetchFromFixerIO() async {
+    print('📡 Trying Fixer.io...');
+    final response = await http.get(
+      Uri.parse('http://data.fixer.io/api/latest?access_key=YOUR_API_KEY&base=USD'),
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success'] == true && data['rates'] != null) {
+        return Map<String, double>.from(
+          data['rates'].map((key, value) => MapEntry(key, value.toDouble())),
+        );
+      }
+    }
+    throw Exception('Fixer.io failed');
+  }
+
+  // API 3: ExchangeRate-API (Current - reliable)
+  Future<Map<String, double>> _fetchFromExchangeRateAPI() async {
+    print('📡 Trying ExchangeRate-API...');
+    final response = await http.get(
+      Uri.parse('https://open.er-api.com/v6/latest/USD'),
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['rates'] != null) {
+        return Map<String, double>.from(
+          data['rates'].map((key, value) => MapEntry(key, value.toDouble())),
+        );
+      }
+    }
+    throw Exception('ExchangeRate-API failed');
+  }
+
+  // API 4: FreeCurrencyAPI (Backup)
+  Future<Map<String, double>> _fetchFromFreeCurrencyAPI() async {
+    print('📡 Trying FreeCurrencyAPI...');
+    final response = await http.get(
+      Uri.parse('https://api.freecurrencyapi.com/v1/latest?apikey=YOUR_API_KEY&base_currency=USD'),
+      headers: {'Accept': 'application/json'},
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['data'] != null) {
+        return Map<String, double>.from(
+          data['data'].map((key, value) => MapEntry(key, value.toDouble())),
+        );
+      }
+    }
+    throw Exception('FreeCurrencyAPI failed');
+  }
+
+  // Save exchange rates to local storage and update currencies
+  Future<void> _saveExchangeRates(Map<String, double> rates) async {
+    _exchangeRates = rates;
+
+    // Update currency exchange rates
+    for (var currency in _currencies) {
+      if (_exchangeRates.containsKey(currency.code)) {
+        currency.exchangeRate = _exchangeRates[currency.code]!;
+      }
+    }
+
+    // Save to local storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_exchangeRatesKey, jsonEncode(_exchangeRates));
+    await prefs.setString(_lastUpdatedKey, DateTime.now().toIso8601String());
   }
 
   // Get all available currencies with latest rates
@@ -185,43 +266,65 @@ class CurrencyService {
 
   // Force update exchange rates (useful for refresh button)
   Future<bool> forceUpdateRates() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://open.er-api.com/v6/latest/USD'),
-      );
+    print('🔄 Force updating exchange rates...');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+    // Try multiple APIs for better reliability
+    final apis = [
+      _fetchFromCurrencyAPI,
+      _fetchFromFixerIO,
+      _fetchFromExchangeRateAPI,
+      _fetchFromFreeCurrencyAPI,
+    ];
 
-        if (data['rates'] != null) {
-          final Map<String, dynamic> newRates = data['rates'];
-          _exchangeRates = newRates.map(
-            (key, value) => MapEntry(key, value.toDouble()),
-          );
-
-          // Update currency exchange rates
-          for (var currency in _currencies) {
-            if (_exchangeRates.containsKey(currency.code)) {
-              currency.exchangeRate = _exchangeRates[currency.code]!;
-            }
-          }
-
-          // Save to local storage
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_exchangeRatesKey, jsonEncode(_exchangeRates));
-          await prefs.setString(
-            _lastUpdatedKey,
-            DateTime.now().toIso8601String(),
-          );
-
+    for (final apiCall in apis) {
+      try {
+        final rates = await apiCall();
+        if (rates.isNotEmpty) {
+          await _saveExchangeRates(rates);
+          print('✅ Exchange rates force updated successfully');
           return true;
         }
+      } catch (e) {
+        print('⚠️ API failed during force update, trying next: $e');
+        continue;
       }
-      return false;
-    } catch (e) {
-      print('Error updating exchange rates: $e');
-      return false;
     }
+
+    print('❌ All APIs failed during force update');
+    return false;
+  }
+
+  // Get last update time for display
+  Future<String> getLastUpdateTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastUpdated = prefs.getString(_lastUpdatedKey);
+
+    if (lastUpdated == null) return 'Never updated';
+
+    final lastUpdateTime = DateTime.parse(lastUpdated);
+    final now = DateTime.now();
+    final difference = now.difference(lastUpdateTime);
+
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} minutes ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hours ago';
+    } else {
+      return '${difference.inDays} days ago';
+    }
+  }
+
+  // Check if rates are fresh (less than 1 hour old)
+  Future<bool> areRatesFresh() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastUpdated = prefs.getString(_lastUpdatedKey);
+
+    if (lastUpdated == null) return false;
+
+    final lastUpdateTime = DateTime.parse(lastUpdated);
+    final now = DateTime.now();
+
+    return now.difference(lastUpdateTime).inHours < 1;
   }
 
   // Convert currency from one to another
