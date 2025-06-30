@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'pending_invitations_widget.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -75,20 +76,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
       if (!userExists) {
         final String emailBody = 'Hi! I would like to invite you to join Ka-Ching, my expense tracking app. Click here to join: https://your-app-link.com/invite/${currentUser.uid}';
 
-        final Uri emailLaunchUri = Uri(
-          scheme: 'mailto',
-          path: _emailController.text,
-          queryParameters: {
-            'subject': 'Join me on Ka-Ching!',
-            'body': emailBody,
-          },
+        // Use share_plus to open the share sheet
+        await Share.share(
+          emailBody,
+          subject: 'Join me on Ka-Ching!',
         );
-
-        if (await canLaunchUrl(emailLaunchUri)) {
-          await launchUrl(emailLaunchUri);
-        } else {
-          throw 'Could not launch email client';
-        }
       }
       
       _emailController.clear();
